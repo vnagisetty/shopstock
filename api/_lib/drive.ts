@@ -24,13 +24,30 @@ export async function checkDriveQuota(): Promise<{ usedFraction: number; blocked
   }
 }
 
-export async function createDriveFolder(name: string): Promise<string> {
-  const drive = google.drive({ version: 'v3', auth: getAuth() })
+// Creates the icon folder in the manager's Google Drive (not the service
+// account's), then shares it with the service account so icon uploads work.
+export async function createDriveFolder(name: string, userAccessToken: string): Promise<string> {
+  const userAuth = new google.auth.OAuth2()
+  userAuth.setCredentials({ access_token: userAccessToken })
+
+  const drive = google.drive({ version: 'v3', auth: userAuth })
   const res = await drive.files.create({
     requestBody: { name, mimeType: 'application/vnd.google-apps.folder' },
     fields: 'id',
   })
-  return res.data.id!
+  const folderId = res.data.id!
+
+  await drive.permissions.create({
+    fileId: folderId,
+    requestBody: {
+      role: 'writer',
+      type: 'user',
+      emailAddress: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL!,
+    },
+    sendNotificationEmail: false,
+  })
+
+  return folderId
 }
 
 export async function uploadIconToDrive(

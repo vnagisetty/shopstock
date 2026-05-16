@@ -8,6 +8,8 @@ export interface SessionData {
   display_name: string
   role: Role
   sheet_id: string
+  // Held temporarily between OAuth callback and store creation, then cleared.
+  oauth_access_token?: string
 }
 
 const SESSION_OPTIONS = {

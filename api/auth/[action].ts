@@ -147,10 +147,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } catch { /* legacy sheet unreachable — fall through */ }
       }
 
-      // 4. Unknown user — set partial session and send to store creation
+      // 4. Unknown user — set partial session and send to store creation.
+      //    Stash the access token so the setup step can create resources in
+      //    the manager's own Google Drive.
       const session = await getSession(req, res)
-      session.gmail        = gmail
-      session.display_name = display_name
+      session.gmail              = gmail
+      session.display_name       = display_name
+      session.oauth_access_token = tokens.access_token ?? ''
       await session.save()
       return res.redirect(302, '/setup')
     } catch (e: unknown) {
@@ -176,24 +179,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const pending = await requirePendingSession(req, res)
     if (!pending) return
 
+    // Read the full session directly to get the stashed OAuth token
+    const setupSession = await getSession(req, res)
+    const accessToken = setupSession.oauth_access_token ?? ''
+    if (!accessToken) return res.status(400).json({ error: 'OAuth token missing — please sign in again' })
+
     const { store_name } = req.body as { store_name?: string }
     if (!store_name?.trim()) return res.status(400).json({ error: 'store_name required' })
     const name = store_name.trim()
 
     try {
-      // Create the Google Sheet
-      const newSheetId = await createStoreSpreadsheet(name)
+      // Create the Google Sheet in the manager's own Drive, shared with service account
+      const newSheetId = await createStoreSpreadsheet(name, accessToken)
 
-      // Initialize tabs + seed data
+      // Initialize tabs + seed data (uses service account, which now has Editor access)
       await initializeSheet(newSheetId)
 
       // Set the store name in Config
       await updateConfig(newSheetId, { store_name: name })
 
-      // Create a Drive folder for item icons
+      // Create a Drive folder for item icons — also in the manager's Drive
       let folderId = ''
       try {
-        folderId = await createDriveFolder(`${name} — Item Icons`)
+        folderId = await createDriveFolder(`${name} — Item Icons`, accessToken)
         await updateConfig(newSheetId, { drive_folder_id: folderId })
       } catch { /* non-fatal — manager can set folder manually */ }
 
@@ -213,12 +221,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Register in central registry
       await registerUserStore(pending.gmail, pending.display_name, newSheetId, name)
 
-      // Promote partial session to full session
+      // Promote partial session to full session (clear the temporary OAuth token)
       const session = await getSession(req, res)
-      session.gmail        = pending.gmail
-      session.display_name = pending.display_name
-      session.role         = 'manager'
-      session.sheet_id     = newSheetId
+      session.gmail              = pending.gmail
+      session.display_name       = pending.display_name
+      session.role               = 'manager'
+      session.sheet_id           = newSheetId
+      session.oauth_access_token = undefined
       await session.save()
 
       return res.status(200).json({ ok: true, sheet_id: newSheetId })

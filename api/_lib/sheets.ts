@@ -334,12 +334,32 @@ export async function initializeSheet(sheetId: string): Promise<void> {
   }
 }
 
-// ── Create a brand-new store spreadsheet ──────────────────────────────────────
+// ── Create a brand-new store spreadsheet in the manager's Google Drive ────────
+// Uses the manager's OAuth token so the Sheet is owned by them, not by the
+// service account. Immediately shares it with the service account (Editor) so
+// the backend can read/write it going forward.
 
-export async function createStoreSpreadsheet(storeName: string): Promise<string> {
-  const sheets = getSheetsClient()
+export async function createStoreSpreadsheet(storeName: string, userAccessToken: string): Promise<string> {
+  const userAuth = new google.auth.OAuth2()
+  userAuth.setCredentials({ access_token: userAccessToken })
+
+  const sheets = google.sheets({ version: 'v4', auth: userAuth })
   const res = await sheets.spreadsheets.create({
     requestBody: { properties: { title: `ShopStock — ${storeName}` } },
   })
-  return res.data.spreadsheetId!
+  const spreadsheetId = res.data.spreadsheetId!
+
+  // Grant the service account Editor access so the backend can read/write it
+  const drive = google.drive({ version: 'v3', auth: userAuth })
+  await drive.permissions.create({
+    fileId: spreadsheetId,
+    requestBody: {
+      role: 'writer',
+      type: 'user',
+      emailAddress: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL!,
+    },
+    sendNotificationEmail: false,
+  })
+
+  return spreadsheetId
 }

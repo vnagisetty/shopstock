@@ -8,4 +8,11 @@ export function getOAuthClient() {
   )
 }
 
-export const OAUTH_SCOPES = ['openid', 'email', 'profile']
+export const OAUTH_SCOPES = [
+  'openid',
+  'email',
+  'profile',
+  // Needed only for managers during store creation: creates one Sheet + one
+  // Drive folder in their own account and shares both with the service account.
+  'https://www.googleapis.com/auth/drive.file',
+]
