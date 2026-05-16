@@ -27,8 +27,13 @@ function AuthenticatedApp() {
       const qs = store ? `?store=${encodeURIComponent(store)}` : ''
       void fetch(`/api/join/${encodeURIComponent(invite)}${qs}`, { method: 'POST', credentials: 'include' })
     }
-    if (navigator.onLine) void sync()
-    void getConfig().then((c) => { if (c?.store_name) setStoreName(c.store_name) })
+    const refreshStoreName = () =>
+      void getConfig().then((c) => { if (c?.store_name) setStoreName(c.store_name) })
+    if (navigator.onLine) {
+      void sync().then(refreshStoreName).catch(refreshStoreName)
+    } else {
+      refreshStoreName()
+    }
   }, [user, sync])
 
   if (!user) return null
