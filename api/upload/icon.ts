@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireSession } from '../_lib/session'
-import { requireRole } from '../_lib/roles'
-import { checkDriveQuota, uploadIconToDrive } from '../_lib/drive'
-import { getConfig } from '../_lib/sheets'
+import { requireSession } from '../_lib/session.js'
+import { requireRole } from '../_lib/roles.js'
+import { checkDriveQuota, uploadIconToDrive } from '../_lib/drive.js'
+import { getConfig } from '../_lib/sheets.js'
 import { Readable } from 'stream'
 
 export const config = { api: { bodyParser: false } }

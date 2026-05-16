@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireSession } from '../_lib/session'
-import { getAllInventory, getAllCategories, getConfig } from '../_lib/sheets'
+import { requireSession } from '../_lib/session.js'
+import { getAllInventory, getAllCategories, getConfig } from '../_lib/sheets.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })

@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getSession } from '../_lib/session'
-import { getStaffByToken, updateStaff } from '../_lib/sheets'
-import { registerUserStore } from '../_lib/registry'
+import { getSession } from '../_lib/session.js'
+import { getStaffByToken, updateStaff } from '../_lib/sheets.js'
+import { registerUserStore } from '../_lib/registry.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })

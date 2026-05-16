@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireSession } from '../_lib/session'
-import { requireRole } from '../_lib/roles'
-import { getAllStaff, appendStaff, getStaffByGmail, updateStaff } from '../_lib/sheets'
-import { trackAction } from '../_lib/analytics'
+import { requireSession } from '../_lib/session.js'
+import { requireRole } from '../_lib/roles.js'
+import { getAllStaff, appendStaff, getStaffByGmail, updateStaff } from '../_lib/sheets.js'
+import { trackAction } from '../_lib/analytics.js'
 import { v4 as uuidv4 } from 'uuid'
 import type { Role } from '../../src/lib/types'
 

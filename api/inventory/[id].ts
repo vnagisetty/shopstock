@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireSession } from '../_lib/session'
-import { requireRole } from '../_lib/roles'
-import { getInventoryItem, updateInventoryItem, deleteInventoryItem } from '../_lib/sheets'
-import { trackAction } from '../_lib/analytics'
+import { requireSession } from '../_lib/session.js'
+import { requireRole } from '../_lib/roles.js'
+import { getInventoryItem, updateInventoryItem, deleteInventoryItem } from '../_lib/sheets.js'
+import { trackAction } from '../_lib/analytics.js'
 import type { InventoryItem } from '../../src/lib/types'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

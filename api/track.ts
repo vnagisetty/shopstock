@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireSession } from './_lib/session'
-import { trackAction } from './_lib/analytics'
+import { requireSession } from './_lib/session.js'
+import { trackAction } from './_lib/analytics.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })

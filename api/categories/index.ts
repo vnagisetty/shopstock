@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireSession } from '../_lib/session'
-import { requireRole } from '../_lib/roles'
-import { getAllCategories, appendCategory, getNextCategoryId, getNextCategorySortOrder } from '../_lib/sheets'
-import { trackAction } from '../_lib/analytics'
+import { requireSession } from '../_lib/session.js'
+import { requireRole } from '../_lib/roles.js'
+import { getAllCategories, appendCategory, getNextCategoryId, getNextCategorySortOrder } from '../_lib/sheets.js'
+import { trackAction } from '../_lib/analytics.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const user = await requireSession(req, res)

@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getOAuthClient, OAUTH_SCOPES } from '../_lib/oauth'
-import { getSession } from '../_lib/session'
-import { requirePendingSession } from '../_lib/session'
-import { lookupUserStore, registerUserStore } from '../_lib/registry'
+import { getOAuthClient, OAUTH_SCOPES } from '../_lib/oauth.js'
+import { getSession } from '../_lib/session.js'
+import { requirePendingSession } from '../_lib/session.js'
+import { lookupUserStore, registerUserStore } from '../_lib/registry.js'
 import {
   getAllStaff,
   getStaffByGmail,
@@ -12,8 +12,8 @@ import {
   initializeSheet,
   createStoreSpreadsheet,
   updateConfig,
-} from '../_lib/sheets'
-import { createDriveFolder } from '../_lib/drive'
+} from '../_lib/sheets.js'
+import { createDriveFolder } from '../_lib/drive.js'
 
 interface OAuthState {
   invite?: string

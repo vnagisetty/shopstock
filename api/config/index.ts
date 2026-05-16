@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireSession } from '../_lib/session'
-import { requireRole } from '../_lib/roles'
-import { getConfig, updateConfig } from '../_lib/sheets'
+import { requireSession } from '../_lib/session.js'
+import { requireRole } from '../_lib/roles.js'
+import { getConfig, updateConfig } from '../_lib/sheets.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const user = await requireSession(req, res)
