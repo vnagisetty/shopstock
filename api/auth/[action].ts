@@ -18,6 +18,7 @@ import { createDriveFolder } from '../_lib/drive.js'
 interface OAuthState {
   invite?: string
   store?: string
+  for?: 'drive'  // marks this as a second-step drive.file grant
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -26,15 +27,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ── GET /api/auth/login ───────────────────────────────────────────────────
   if (action === 'login') {
     const oauth2Client = getOAuthClient()
-    const invite = typeof req.query.invite === 'string' ? req.query.invite : ''
-    const store  = typeof req.query.store  === 'string' ? req.query.store  : ''
+    const invite   = typeof req.query.invite === 'string' ? req.query.invite : ''
+    const store    = typeof req.query.store  === 'string' ? req.query.store  : ''
+    const forDrive = req.query.for === 'drive'
+    const hint     = typeof req.query.hint   === 'string' ? req.query.hint   : ''
     const state: OAuthState = {}
-    if (invite) state.invite = invite
-    if (store)  state.store  = store
+    if (invite)   state.invite = invite
+    if (store)    state.store  = store
+    if (forDrive) state.for    = 'drive'
     const url = oauth2Client.generateAuthUrl({
       access_type: 'offline',
-      scope: OAUTH_SCOPES,
-      prompt: 'select_account',
+      scope: forDrive ? ['https://www.googleapis.com/auth/drive.file'] : OAUTH_SCOPES,
+      prompt: forDrive ? 'consent' : 'select_account',
+      ...(hint ? { login_hint: hint } : {}),
       state: JSON.stringify(state),
     })
     return res.redirect(302, url)
@@ -50,6 +55,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try { stateData = JSON.parse(stateRaw) } catch { /* empty state */ }
     const inviteToken = stateData.invite ?? ''
     const storeId     = stateData.store  ?? ''
+
+    // Second-step drive.file grant: just update the session token and return to /setup
+    if (stateData.for === 'drive') {
+      try {
+        const oauth2Client = getOAuthClient()
+        const { tokens } = await oauth2Client.getToken(code)
+        const session = await getSession(req, res)
+        if (!session.gmail) return res.redirect(302, '/login?error=session_expired')
+        session.oauth_access_token = tokens.access_token ?? ''
+        await session.save()
+        return res.redirect(302, '/setup')
+      } catch {
+        return res.redirect(302, '/login?error=oauth_failed')
+      }
+    }
 
     try {
       const oauth2Client = getOAuthClient()
@@ -147,15 +167,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } catch { /* legacy sheet unreachable — fall through */ }
       }
 
-      // 4. Unknown user — set partial session and send to store creation.
-      //    Stash the access token so the setup step can create resources in
-      //    the manager's own Google Drive.
+      // 4. Unknown user — send to store creation.
+      //    If drive.file scope wasn't granted (e.g. cached consent from before the
+      //    scope was added), do a second OAuth step to get it explicitly.
+      const grantedScopes = (tokens.scope ?? '').split(' ')
+      const hasDriveFile = grantedScopes.includes('https://www.googleapis.com/auth/drive.file')
+
       const session = await getSession(req, res)
-      session.gmail              = gmail
-      session.display_name       = display_name
-      session.oauth_access_token = tokens.access_token ?? ''
+      session.gmail        = gmail
+      session.display_name = display_name
+      if (hasDriveFile) {
+        session.oauth_access_token = tokens.access_token ?? ''
+        await session.save()
+        return res.redirect(302, '/setup')
+      }
+      // Missing drive.file — store partial session and redirect for explicit consent
       await session.save()
-      return res.redirect(302, '/setup')
+      return res.redirect(302, `/api/auth/login?for=drive&hint=${encodeURIComponent(gmail)}`)
     } catch (e: unknown) {
       console.error('OAuth callback error:', e)
       return res.redirect(302, '/login?error=oauth_failed')
