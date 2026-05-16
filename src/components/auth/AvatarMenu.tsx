@@ -17,6 +17,7 @@ interface Props {
 export function AvatarMenu({ user }: Props) {
   async function handleSignOut() {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+    // Note: /api/auth/logout routes to /api/auth/[action] with action=logout
     window.location.href = '/login'
   }
 

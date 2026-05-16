@@ -88,7 +88,7 @@ export function AddEditItemPage({ user }: Props) {
         // Can't allocate item_id offline — queue and let backend assign on flush
         await queueWrite('create', 'inventory', null, payload as unknown as Record<string, unknown>)
       } else {
-        const res = await apiFetch('/api/items/create', {
+        const res = await apiFetch('/api/inventory', {
           method: 'POST',
           body: JSON.stringify(payload),
         }) as CreateResponse

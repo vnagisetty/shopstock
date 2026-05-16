@@ -17,7 +17,7 @@ export async function flushWriteQueue(): Promise<void> {
     try {
       if (entry.resource === 'inventory') {
         if (entry.operation === 'create') {
-          await apiFetch('/api/items/create', { method: 'POST', body: JSON.stringify(entry.payload) })
+          await apiFetch('/api/inventory', { method: 'POST', body: JSON.stringify(entry.payload) })
         } else if (entry.operation === 'update' && entry.resourceId) {
           await apiFetch(`/api/inventory/${entry.resourceId}`, { method: 'PUT', body: JSON.stringify(entry.payload) })
         } else if (entry.operation === 'delete' && entry.resourceId) {

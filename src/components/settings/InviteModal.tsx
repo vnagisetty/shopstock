@@ -22,9 +22,9 @@ export function InviteModal({ onDone }: Props) {
   async function handleGenerate() {
     setLoading(true)
     try {
-      const res = await apiFetch('/api/staff/invite', {
+      const res = await apiFetch('/api/staff', {
         method: 'POST',
-        body: JSON.stringify({ role }),
+        body: JSON.stringify({ action: 'invite', role }),
       }) as InviteResponse
       setInviteUrl(res.inviteUrl)
     } catch (e: unknown) {

@@ -22,7 +22,7 @@ const statusBadge: Record<string, string> = {
 export function StaffList({ staff, onRefresh }: Props) {
   async function revoke(gmail: string) {
     if (!confirm(`Revoke access for ${gmail}?`)) return
-    await apiFetch('/api/staff/revoke', { method: 'POST', body: JSON.stringify({ gmail }) })
+    await apiFetch('/api/staff', { method: 'POST', body: JSON.stringify({ action: 'revoke', gmail }) })
     onRefresh()
   }
 

@@ -14,6 +14,7 @@ export function LoginPage() {
   function handleSignIn() {
     const inv = invite ?? sessionStorage.getItem('pendingInvite') ?? ''
     const loginUrl = `/api/auth/login${inv ? `?invite=${encodeURIComponent(inv)}` : ''}`
+    // Note: /api/auth/login routes to /api/auth/[action] with action=login
     window.location.href = loginUrl
   }
 
