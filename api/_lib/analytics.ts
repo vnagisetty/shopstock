@@ -15,7 +15,7 @@ function getAuth() {
 }
 
 export function trackAction(
-  user: Pick<SessionData, 'gmail' | 'display_name' | 'role'>,
+  user: Pick<SessionData, 'gmail' | 'display_name' | 'role' | 'sheet_id'>,
   action: string,
   actionCountDelta = 1,
 ): void {
@@ -25,16 +25,17 @@ export function trackAction(
   Promise.resolve().then(async () => {
     const sheets = google.sheets({ version: 'v4', auth: getAuth() })
     const now = new Date().toISOString()
-    const storeSheetId = process.env.GOOGLE_SHEETS_ID ?? ''
 
     let store_name = ''
-    try {
-      const configRes = await sheets.spreadsheets.values.get({
-        spreadsheetId: storeSheetId,
-        range: 'Config!A2:A2',
-      })
-      store_name = (configRes.data.values as string[][])?.[0]?.[0] ?? ''
-    } catch { /* ignore — store_name stays empty */ }
+    if (user.sheet_id) {
+      try {
+        const configRes = await sheets.spreadsheets.values.get({
+          spreadsheetId: user.sheet_id,
+          range: 'Config!A2:A2',
+        })
+        store_name = (configRes.data.values as string[][])?.[0]?.[0] ?? ''
+      } catch { /* ignore */ }
+    }
 
     const usageRes = await sheets.spreadsheets.values.get({
       spreadsheetId: analyticsSheetId,
@@ -50,15 +51,9 @@ export function trackAction(
         valueInputOption: 'RAW',
         requestBody: {
           values: [[
-            user.gmail,
-            user.display_name,
-            user.role,
-            store_name,
-            storeSheetId,
-            now,
-            now,
-            String(actionCountDelta),
-            action,
+            user.gmail, user.display_name, user.role,
+            store_name, user.sheet_id,
+            now, now, String(actionCountDelta), action,
           ]],
         },
       })
@@ -71,15 +66,10 @@ export function trackAction(
         valueInputOption: 'RAW',
         requestBody: {
           values: [[
-            user.gmail,
-            user.display_name,
-            user.role,
-            store_name || rows[idx][3],
-            storeSheetId,
-            rows[idx][5],
-            now,
-            String(currentCount + actionCountDelta),
-            action,
+            user.gmail, user.display_name, user.role,
+            store_name || rows[idx][3], user.sheet_id,
+            rows[idx][5], now,
+            String(currentCount + actionCountDelta), action,
           ]],
         },
       })

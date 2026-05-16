@@ -9,17 +9,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const user = await requireSession(req, res)
   if (!user) return
 
-  // GET /api/inventory — list all items
   if (req.method === 'GET') {
     try {
-      const inventory = await getAllInventory()
+      const inventory = await getAllInventory(user.sheet_id)
       return res.status(200).json({ inventory })
     } catch (e: unknown) {
       return res.status(500).json({ error: String(e) })
     }
   }
 
-  // POST /api/inventory — create new item
   if (req.method === 'POST') {
     if (!requireRole(user.role, 'edit', res)) return
     try {
@@ -28,7 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (body.base_price == null || body.retail_price == null) {
         return res.status(400).json({ error: 'base_price and retail_price required' })
       }
-      const item_id = await allocateNextItemId()
+      const item_id = await allocateNextItemId(user.sheet_id)
       const now = new Date().toISOString()
       const item: InventoryItem = {
         item_id,
@@ -45,7 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updated_at: now,
         updated_by: user.gmail,
       }
-      await appendInventoryItem(item)
+      await appendInventoryItem(user.sheet_id, item)
       trackAction(user, 'add_item')
       return res.status(201).json({ item })
     } catch (e: unknown) {

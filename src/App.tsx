@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
 import { LoginPage } from '@/pages/LoginPage'
+import { SetupPage } from '@/pages/SetupPage'
 import { ItemsPage } from '@/pages/ItemsPage'
 import { ItemDetailPage } from '@/pages/ItemDetailPage'
 import { AddEditItemPage } from '@/pages/AddEditItemPage'
@@ -19,9 +20,12 @@ function AuthenticatedApp() {
     if (!user) return
     // Claim pending invite token if present from sessionStorage
     const invite = sessionStorage.getItem('pendingInvite')
+    const store  = sessionStorage.getItem('pendingStore')
     if (invite) {
       sessionStorage.removeItem('pendingInvite')
-      void fetch(`/api/join/${encodeURIComponent(invite)}`, { method: 'POST', credentials: 'include' })
+      sessionStorage.removeItem('pendingStore')
+      const qs = store ? `?store=${encodeURIComponent(store)}` : ''
+      void fetch(`/api/join/${encodeURIComponent(invite)}${qs}`, { method: 'POST', credentials: 'include' })
     }
     if (navigator.onLine) void sync()
     void getConfig().then((c) => { if (c?.store_name) setStoreName(c.store_name) })
@@ -56,6 +60,7 @@ function AppRouter() {
 
   return (
     <Routes>
+      <Route path="/setup" element={<SetupPage />} />
       <Route path="/login" element={user ? <Navigate to="/items" replace /> : <LoginPage />} />
       <Route path="*" element={user ? <AuthenticatedApp /> : <Navigate to="/login" replace />} />
     </Routes>

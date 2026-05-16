@@ -10,7 +10,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === 'GET') {
     try {
-      const categories = await getAllCategories()
+      const categories = await getAllCategories(user.sheet_id)
       res.status(200).json({ categories })
     } catch (e: unknown) {
       res.status(500).json({ error: String(e) })
@@ -23,10 +23,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const { category_name } = req.body as { category_name?: string }
       if (!category_name?.trim()) return res.status(400).json({ error: 'category_name required' })
-      const category_id = await getNextCategoryId()
-      const sort_order = await getNextCategorySortOrder()
+      const category_id = await getNextCategoryId(user.sheet_id)
+      const sort_order  = await getNextCategorySortOrder(user.sheet_id)
       const cat = { category_id, category_name: category_name.trim(), sort_order, created_at: new Date().toISOString() }
-      await appendCategory(cat)
+      await appendCategory(user.sheet_id, cat)
       trackAction(user, 'add_category')
       res.status(201).json({ category: cat })
     } catch (e: unknown) {

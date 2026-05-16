@@ -13,7 +13,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === 'GET') {
     try {
-      const item = await getInventoryItem(id)
+      const item = await getInventoryItem(user.sheet_id, id)
       if (!item) return res.status(404).json({ error: 'Not found' })
       res.status(200).json({ item })
     } catch (e: unknown) {
@@ -25,7 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'PUT') {
     if (!requireRole(user.role, 'edit', res)) return
     try {
-      const existing = await getInventoryItem(id)
+      const existing = await getInventoryItem(user.sheet_id, id)
       if (!existing) return res.status(404).json({ error: 'Not found' })
       const body = req.body as Partial<InventoryItem>
       const updated: InventoryItem = {
@@ -35,7 +35,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updated_at: new Date().toISOString(),
         updated_by: user.gmail,
       }
-      await updateInventoryItem(updated)
+      await updateInventoryItem(user.sheet_id, updated)
       trackAction(user, 'edit_item')
       res.status(200).json({ item: updated })
     } catch (e: unknown) {
@@ -47,7 +47,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'DELETE') {
     if (!requireRole(user.role, 'full', res)) return
     try {
-      await deleteInventoryItem(id)
+      await deleteInventoryItem(user.sheet_id, id)
       trackAction(user, 'delete_item')
       res.status(200).json({ ok: true })
     } catch (e: unknown) {

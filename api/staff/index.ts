@@ -11,17 +11,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!user) return
   if (!requireRole(user.role, 'manager', res)) return
 
-  // GET /api/staff — list all staff
   if (req.method === 'GET') {
     try {
-      const staff = await getAllStaff()
+      const staff = await getAllStaff(user.sheet_id)
       return res.status(200).json({ staff })
     } catch (e: unknown) {
       return res.status(500).json({ error: String(e) })
     }
   }
 
-  // POST /api/staff — invite or revoke based on body.action
   if (req.method === 'POST') {
     const { action } = req.body as { action?: string }
 
@@ -34,7 +32,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const token = uuidv4()
         const now = new Date()
         const expires = new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString()
-        await appendStaff({
+        await appendStaff(user.sheet_id, {
           gmail: `__invited__${token}`,
           display_name: '',
           role: role as Role,
@@ -45,7 +43,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           joined_at: '',
         })
         const baseUrl = process.env.GOOGLE_REDIRECT_URI?.replace('/api/auth/callback', '') ?? ''
-        const inviteUrl = `${baseUrl}/login?invite=${token}`
+        // Include the store sheet_id so the invite recipient joins the right store
+        const inviteUrl = `${baseUrl}/login?invite=${token}&store=${encodeURIComponent(user.sheet_id)}`
         trackAction(user, 'invite_staff')
         return res.status(200).json({ inviteUrl, token, expires })
       } catch (e: unknown) {
@@ -57,10 +56,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       try {
         const { gmail } = req.body as { gmail?: string }
         if (!gmail) return res.status(400).json({ error: 'gmail required' })
-        const staff = await getStaffByGmail(gmail)
+        const staff = await getStaffByGmail(user.sheet_id, gmail)
         if (!staff) return res.status(404).json({ error: 'Staff member not found' })
         if (staff.role === 'manager') return res.status(400).json({ error: 'Cannot revoke manager' })
-        await updateStaff({ ...staff, status: 'revoked' })
+        await updateStaff(user.sheet_id, { ...staff, status: 'revoked' })
         trackAction(user, 'revoke_staff')
         return res.status(200).json({ ok: true })
       } catch (e: unknown) {

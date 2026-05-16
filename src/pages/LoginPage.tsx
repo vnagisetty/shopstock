@@ -3,34 +3,40 @@ import { useSearchParams } from 'react-router-dom'
 
 export function LoginPage() {
   const [params] = useSearchParams()
-  const error = params.get('error')
+  const error  = params.get('error')
   const invite = params.get('invite')
+  const store  = params.get('store')
 
-  // Store invite token before redirecting to OAuth
   useEffect(() => {
     if (invite) sessionStorage.setItem('pendingInvite', invite)
-  }, [invite])
+    if (store)  sessionStorage.setItem('pendingStore',  store)
+  }, [invite, store])
 
   function handleSignIn() {
     const inv = invite ?? sessionStorage.getItem('pendingInvite') ?? ''
-    const loginUrl = `/api/auth/login${inv ? `?invite=${encodeURIComponent(inv)}` : ''}`
-    // Note: /api/auth/login routes to /api/auth/[action] with action=login
-    window.location.href = loginUrl
+    const str = store  ?? sessionStorage.getItem('pendingStore')  ?? ''
+    const qs = new URLSearchParams()
+    if (inv) qs.set('invite', inv)
+    if (str) qs.set('store',  str)
+    const query = qs.toString()
+    window.location.href = `/api/auth/login${query ? `?${query}` : ''}`
   }
 
   const errorMessages: Record<string, string> = {
-    not_authorized: 'Your account is not authorized. Ask your manager for an invite.',
+    not_authorized: 'That Google account isn\'t added to any store yet.',
     invite_expired: 'This invite link has expired. Ask your manager for a new one.',
-    invite_invalid: 'This invite link is invalid.',
-    oauth_failed: 'Sign-in failed. Please try again.',
+    invite_invalid: 'This invite link is invalid or already used.',
+    oauth_failed:   'Sign-in failed. Please try again.',
   }
+
+  const isInvite = Boolean(invite ?? sessionStorage.getItem('pendingInvite'))
 
   return (
     <div className="min-h-dvh bg-gradient-to-br from-teal-600 to-teal-800 flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-sm">
         <div className="text-center mb-10">
           <div className="w-20 h-20 rounded-2xl bg-white/20 flex items-center justify-center mx-auto mb-4">
-            <img src="/icons/icon.svg" alt="ShopStock" className="w-12 h-12" />
+            <img src="/icons/logo.svg" alt="ShopStock" className="w-12 h-12" />
           </div>
           <h1 className="text-3xl font-bold text-white tracking-tight">ShopStock</h1>
           <p className="text-teal-100 mt-1 text-sm">Inventory management for your store</p>
@@ -42,9 +48,9 @@ export function LoginPage() {
           </div>
         )}
 
-        {invite && !error && (
-          <div className="bg-white/20 text-white rounded-xl px-4 py-3 mb-6 text-sm">
-            You've been invited! Sign in to accept your invitation.
+        {isInvite && !error && (
+          <div className="bg-white/20 text-white rounded-xl px-4 py-3 mb-6 text-sm text-center">
+            You've been invited! Sign in with Google to accept.
           </div>
         )}
 
@@ -62,7 +68,9 @@ export function LoginPage() {
         </button>
 
         <p className="text-teal-200 text-xs text-center mt-6">
-          Only authorized staff can access this app
+          {isInvite
+            ? 'Sign in to join your store'
+            : 'Sign in to create your store or join an existing one'}
         </p>
       </div>
     </div>

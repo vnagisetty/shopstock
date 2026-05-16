@@ -46,6 +46,7 @@ export interface SessionUser {
   gmail: string
   display_name: string
   role: Role
+  sheet_id: string
 }
 
 export interface SyncSnapshot {

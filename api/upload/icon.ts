@@ -14,7 +14,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!requireRole(user.role, 'edit', res)) return
 
   try {
-    const storeConfig = await getConfig()
+    const storeConfig = await getConfig(user.sheet_id)
     const folderId = storeConfig.drive_folder_id
     if (!folderId) return res.status(400).json({ error: 'Drive folder not configured. Set drive_folder_id in Config tab.' })
 
@@ -23,14 +23,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(507).json({ error: 'Google Drive storage is above 90% full. Free up space before uploading icons.' })
     }
 
-    // Parse multipart form — Vercel functions support reading raw body
     const chunks: Buffer[] = []
     for await (const chunk of req as unknown as AsyncIterable<Buffer>) {
       chunks.push(chunk)
     }
     const body = Buffer.concat(chunks)
 
-    // Extract the file part from the multipart body
     const boundary = (req.headers['content-type'] ?? '').split('boundary=')[1]
     if (!boundary) return res.status(400).json({ error: 'Missing multipart boundary' })
 
@@ -49,38 +47,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-interface MultipartPart {
-  name: string
-  data: Buffer
-}
+interface MultipartPart { name: string; data: Buffer }
 
 function parseMultipart(body: Buffer, boundary: string): MultipartPart[] {
   const parts: MultipartPart[] = []
   const sep = Buffer.from(`--${boundary}`)
   let start = 0
-
   while (start < body.length) {
     const sepIdx = body.indexOf(sep, start)
     if (sepIdx === -1) break
-    start = sepIdx + sep.length + 2 // skip \r\n
-
-    // Find header/body boundary (\r\n\r\n)
+    start = sepIdx + sep.length + 2
     const headerEnd = body.indexOf('\r\n\r\n', start)
     if (headerEnd === -1) break
-
     const headerStr = body.subarray(start, headerEnd).toString()
     start = headerEnd + 4
-
     const nameMatch = headerStr.match(/name="([^"]+)"/)
     if (!nameMatch) continue
-    const name = nameMatch[1]
-
     const nextSep = body.indexOf(sep, start)
     if (nextSep === -1) break
-    const data = body.subarray(start, nextSep - 2) // strip trailing \r\n
-    parts.push({ name, data })
+    parts.push({ name: nameMatch[1], data: body.subarray(start, nextSep - 2) })
     start = nextSep
   }
-
   return parts
 }

@@ -9,9 +9,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const [inventory, categories, config] = await Promise.all([
-      getAllInventory(),
-      getAllCategories(),
-      getConfig(),
+      getAllInventory(user.sheet_id),
+      getAllCategories(user.sheet_id),
+      getConfig(user.sheet_id),
     ])
     res.status(200).json({ inventory, categories, config })
   } catch (e: unknown) {

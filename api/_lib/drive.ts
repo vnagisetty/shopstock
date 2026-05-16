@@ -20,9 +20,17 @@ export async function checkDriveQuota(): Promise<{ usedFraction: number; blocked
     const usedFraction = parseInt(quota.usageInDrive) / parseInt(quota.limit)
     return { usedFraction, blocked: usedFraction > 0.9 }
   } catch {
-    // Service accounts don't have personal storage quota — skip the check
     return { usedFraction: 0, blocked: false }
   }
+}
+
+export async function createDriveFolder(name: string): Promise<string> {
+  const drive = google.drive({ version: 'v3', auth: getAuth() })
+  const res = await drive.files.create({
+    requestBody: { name, mimeType: 'application/vnd.google-apps.folder' },
+    fields: 'id',
+  })
+  return res.data.id!
 }
 
 export async function uploadIconToDrive(
@@ -34,22 +42,16 @@ export async function uploadIconToDrive(
   const drive = google.drive({ version: 'v3', auth: getAuth() })
 
   const file = await drive.files.create({
-    requestBody: {
-      name: filename,
-      parents: [folderId],
-    },
+    requestBody: { name: filename, parents: [folderId] },
     media: { mimeType, body: stream },
     fields: 'id,webContentLink',
   })
 
   const fileId = file.data.id!
-
-  // Make the file publicly readable
   await drive.permissions.create({
     fileId,
     requestBody: { role: 'reader', type: 'anyone' },
   })
 
-  // Return direct download URL
   return `https://drive.google.com/uc?export=view&id=${fileId}`
 }
