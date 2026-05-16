@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireSession } from '../_lib/session'
 import { requireRole } from '../_lib/roles'
 import { getAllInventory, appendInventoryItem, allocateNextItemId } from '../_lib/sheets'
+import { trackAction } from '../_lib/analytics'
 import type { InventoryItem } from '../../src/lib/types'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -45,6 +46,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updated_by: user.gmail,
       }
       await appendInventoryItem(item)
+      trackAction(user, 'add_item')
       return res.status(201).json({ item })
     } catch (e: unknown) {
       console.error('inventory POST error:', e)

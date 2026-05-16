@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireSession } from '../_lib/session'
 import { requireRole } from '../_lib/roles'
 import { getInventoryItem, updateInventoryItem, deleteInventoryItem } from '../_lib/sheets'
+import { trackAction } from '../_lib/analytics'
 import type { InventoryItem } from '../../src/lib/types'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -35,6 +36,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updated_by: user.gmail,
       }
       await updateInventoryItem(updated)
+      trackAction(user, 'edit_item')
       res.status(200).json({ item: updated })
     } catch (e: unknown) {
       res.status(500).json({ error: String(e) })
@@ -46,6 +48,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!requireRole(user.role, 'full', res)) return
     try {
       await deleteInventoryItem(id)
+      trackAction(user, 'delete_item')
       res.status(200).json({ ok: true })
     } catch (e: unknown) {
       res.status(500).json({ error: String(e) })

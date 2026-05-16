@@ -1,0 +1,743 @@
+{
+  "meta": {
+    "project": "ShopStock",
+    "version": "1.0.0",
+    "description": "Mobile-first PWA for small grocery store inventory management",
+    "generated": "2026-05-16",
+    "deploy_target": "Vercel (Hobby plan)",
+    "repo": "https://github.com/vnagisetty/shopstock"
+  },
+
+  "tech_stack": {
+    "frontend": {
+      "framework": "React 19",
+      "bundler": "Vite 6",
+      "language": "TypeScript",
+      "routing": "react-router-dom v7",
+      "styling": "Tailwind CSS v3 (teal palette, #00897B primary)",
+      "ui_primitives": [
+        "@radix-ui/react-dialog",
+        "@radix-ui/react-dropdown-menu",
+        "@radix-ui/react-select"
+      ],
+      "icons": "lucide-react",
+      "offline_storage": "idb v8 (typed IndexedDB wrapper)",
+      "pwa": "vite-plugin-pwa (Workbox)"
+    },
+    "backend": {
+      "runtime": "Vercel Serverless Functions (Node.js)",
+      "module_system": "CommonJS (api/package.json overrides root ESM)",
+      "session": "iron-session v8 (httpOnly cookie, 7-day maxAge)",
+      "google_apis": "googleapis v144 (Sheets v4, Drive v3, OAuth2)",
+      "id_generation": "uuid v9"
+    },
+    "database": "Google Sheets (source of truth, 4 tabs)",
+    "image_storage": "Google Drive (service account, public reader permissions)",
+    "auth_identity": "Google OAuth 2.0 (openid email profile — identity only)",
+    "auth_data": "Google Service Account (all Sheets + Drive API calls)"
+  },
+
+  "architecture_decisions": [
+    {
+      "decision": "Service account for Sheets/Drive, not user OAuth tokens",
+      "rationale": "Avoids per-user token storage and refresh complexity. Manager shares Sheet/Drive folder with service account once during setup.",
+      "trade_off": "Service account has access to all data regardless of which user is logged in — acceptable for single-store deployment."
+    },
+    {
+      "decision": "Google Sheets as database",
+      "rationale": "Zero cost, familiar to non-technical store managers, built-in audit trail via version history.",
+      "trade_off": "No transactions, no indexes, row-scan updates (read all → find row → update by index). Not suitable for high write volume."
+    },
+    {
+      "decision": "IndexedDB as offline cache (idb v8)",
+      "rationale": "Enables offline reads. Writes queue in writeQueue store and flush on reconnect.",
+      "trade_off": "Frontend and Sheets can diverge during offline periods. Flush is last-write-wins."
+    },
+    {
+      "decision": "Consolidated Vercel functions (11 total, under 12-function Hobby limit)",
+      "rationale": "Vercel Hobby plan caps at 12 serverless functions. Merged auth/login+callback+logout → api/auth/[action].ts; staff/invite+revoke → api/staff/index.ts (action param); items/create merged into api/inventory/index.ts POST.",
+      "trade_off": "Some endpoints use body.action dispatch instead of distinct HTTP paths — slightly less RESTful."
+    },
+    {
+      "decision": "api/package.json overrides module type to commonjs",
+      "rationale": "Root package.json has 'type: module' (Vite requirement). Vercel compiles API functions as CJS. Without the override, 'exports is not defined in ES module scope' crashes all functions.",
+      "trade_off": "Must remember this file exists; mixing CJS and ESM in same repo is non-obvious."
+    },
+    {
+      "decision": "moduleResolution: node (not node16) in api/tsconfig.json",
+      "rationale": "node16 and nodenext require explicit .js extensions on relative imports. googleapis and other libraries don't follow that convention, causing TS2835 build errors on Vercel.",
+      "trade_off": "Less strict module resolution — potential runtime issues if imports are ambiguous."
+    }
+  ],
+
+  "environment_variables": {
+    "required": [
+      {
+        "name": "GOOGLE_CLIENT_ID",
+        "used_in": ["api/auth/[action].ts", "api/_lib/oauth.ts"],
+        "description": "Google OAuth 2.0 client ID for identity login flow"
+      },
+      {
+        "name": "GOOGLE_CLIENT_SECRET",
+        "used_in": ["api/auth/[action].ts", "api/_lib/oauth.ts"],
+        "description": "Google OAuth 2.0 client secret"
+      },
+      {
+        "name": "GOOGLE_REDIRECT_URI",
+        "used_in": ["api/_lib/oauth.ts"],
+        "description": "Must match Authorized redirect URI in Google Cloud Console (e.g. https://shopstock-inky.vercel.app/api/auth/callback)"
+      },
+      {
+        "name": "GOOGLE_SERVICE_ACCOUNT_EMAIL",
+        "used_in": ["api/_lib/sheets.ts", "api/_lib/drive.ts"],
+        "description": "Service account email — must have Editor access to the Google Sheet and Drive folder"
+      },
+      {
+        "name": "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY",
+        "used_in": ["api/_lib/sheets.ts", "api/_lib/drive.ts"],
+        "description": "PEM private key. Paste with literal \\n sequences; code does .replace(/\\\\n/g, '\\n')"
+      },
+      {
+        "name": "GOOGLE_SHEETS_ID",
+        "used_in": ["api/_lib/sheets.ts"],
+        "description": "The spreadsheet ID from the Google Sheet URL"
+      },
+      {
+        "name": "SESSION_SECRET",
+        "used_in": ["api/_lib/session.ts"],
+        "description": "Must be ≥32 chars. Generate: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
+      },
+      {
+        "name": "GOOGLE_DRIVE_FOLDER_ID",
+        "used_in": ["api/upload/icon.ts"],
+        "description": "Drive folder ID where item icons are uploaded (from folder URL)"
+      }
+    ]
+  },
+
+  "entry_points": {
+    "frontend": "src/main.tsx → src/App.tsx",
+    "api_functions": [
+      "api/auth/[action].ts",
+      "api/me.ts",
+      "api/sync/full.ts",
+      "api/inventory/index.ts",
+      "api/inventory/[id].ts",
+      "api/categories/index.ts",
+      "api/categories/[id].ts",
+      "api/staff/index.ts",
+      "api/config/index.ts",
+      "api/upload/icon.ts",
+      "api/join/[token].ts"
+    ],
+    "pwa_service_worker": "auto-generated by vite-plugin-pwa at build time"
+  },
+
+  "api_endpoints": [
+    {
+      "method": "GET",
+      "path": "/api/auth/login",
+      "file": "api/auth/[action].ts",
+      "min_role": null,
+      "description": "Redirects to Google OAuth consent URL. Passes invite token as state param."
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/callback",
+      "file": "api/auth/[action].ts",
+      "min_role": null,
+      "description": "Exchanges OAuth code for tokens, fetches userinfo, bootstraps manager if first login, validates invite token, sets iron-session cookie."
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "file": "api/auth/[action].ts",
+      "min_role": "any",
+      "description": "Destroys session cookie."
+    },
+    {
+      "method": "GET",
+      "path": "/api/me",
+      "file": "api/me.ts",
+      "min_role": "any",
+      "description": "Returns {gmail, display_name, role} from session."
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/full",
+      "file": "api/sync/full.ts",
+      "min_role": "any",
+      "description": "Returns full SyncSnapshot: {inventory[], categories[], config} for seeding IndexedDB."
+    },
+    {
+      "method": "GET",
+      "path": "/api/inventory",
+      "file": "api/inventory/index.ts",
+      "min_role": "any",
+      "description": "Returns all inventory items from Sheets."
+    },
+    {
+      "method": "POST",
+      "path": "/api/inventory",
+      "file": "api/inventory/index.ts",
+      "min_role": "edit",
+      "description": "Creates new item: allocates item_id (increments Config!C2 last_item_seq), appends row to Inventory tab."
+    },
+    {
+      "method": "GET",
+      "path": "/api/inventory/[id]",
+      "file": "api/inventory/[id].ts",
+      "min_role": "any",
+      "description": "Returns single item by item_id."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/inventory/[id]",
+      "file": "api/inventory/[id].ts",
+      "min_role": "edit",
+      "description": "Updates item fields. Row-scan: reads column A, finds row by item_id, updates that row."
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/inventory/[id]",
+      "file": "api/inventory/[id].ts",
+      "min_role": "full",
+      "description": "Deletes item row from Sheets using batchUpdate deleteDimension."
+    },
+    {
+      "method": "GET",
+      "path": "/api/categories",
+      "file": "api/categories/index.ts",
+      "min_role": "any",
+      "description": "Returns all categories sorted by sort_order."
+    },
+    {
+      "method": "POST",
+      "path": "/api/categories",
+      "file": "api/categories/index.ts",
+      "min_role": "manager",
+      "description": "Creates new category. Auto-generates CAT### ID and sort_order."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/categories/[id]",
+      "file": "api/categories/[id].ts",
+      "min_role": "manager",
+      "description": "Updates category name."
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/categories/[id]",
+      "file": "api/categories/[id].ts",
+      "min_role": "manager",
+      "description": "Deletes category. Blocks deletion of 'Misc' category."
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff",
+      "file": "api/staff/index.ts",
+      "min_role": "manager",
+      "description": "Returns all staff rows from Staff tab."
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff",
+      "file": "api/staff/index.ts",
+      "min_role": "manager",
+      "description": "action=invite: generates UUID token, 48h expiry, appends placeholder row. action=revoke: sets status=revoked (blocks revoking manager)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/config",
+      "file": "api/config/index.ts",
+      "min_role": "any",
+      "description": "Returns Config row (store_name, drive_folder_id, last_item_seq)."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/config",
+      "file": "api/config/index.ts",
+      "min_role": "manager",
+      "description": "Updates store_name in Config tab."
+    },
+    {
+      "method": "POST",
+      "path": "/api/upload/icon",
+      "file": "api/upload/icon.ts",
+      "min_role": "edit",
+      "description": "Receives multipart icon upload. Checks Drive quota (skips for service accounts). Uploads to Drive, sets public reader permission, returns {url}."
+    },
+    {
+      "method": "POST",
+      "path": "/api/join/[token]",
+      "file": "api/join/[token].ts",
+      "min_role": "any (must be authenticated)",
+      "description": "Validates invite token and expiry. Updates staff row with real gmail, sets status=active, joined_at. Updates session role."
+    }
+  ],
+
+  "google_sheets_schema": {
+    "spreadsheet_id_env": "GOOGLE_SHEETS_ID",
+    "tabs": [
+      {
+        "name": "Inventory",
+        "range": "Inventory!A2:M",
+        "columns": [
+          "item_id", "item_name", "category", "quantity", "unit",
+          "base_price", "retail_price", "wholesale_price",
+          "icon_url", "notes", "created_at", "updated_at", "updated_by"
+        ],
+        "key_column": "A (item_id)"
+      },
+      {
+        "name": "Staff",
+        "range": "Staff!A2:G",
+        "columns": [
+          "gmail", "display_name", "role", "status",
+          "invite_token", "invite_expires", "joined_at"
+        ],
+        "key_column": "A (gmail) — invited placeholder uses __invited__TOKEN"
+      },
+      {
+        "name": "Config",
+        "range": "Config!A2:C2",
+        "columns": ["store_name", "drive_folder_id", "last_item_seq"],
+        "key_column": "single row (A2:C2)"
+      },
+      {
+        "name": "Categories",
+        "range": "Categories!A2:C",
+        "columns": ["category_id", "category_name", "sort_order"],
+        "key_column": "A (category_id)",
+        "notes": "Misc category seeded on first init, cannot be deleted"
+      }
+    ],
+    "update_pattern": "Read full column A → findIndex(row => row[0] === id) → update at index+2 (1-based + header row)",
+    "item_id_allocation": "Read Config!C2 (last_item_seq) → increment → write back → zero-pad to 3 digits (e.g. 007)"
+  },
+
+  "indexeddb_schema": {
+    "database_name": "shopstock-db",
+    "version": 1,
+    "stores": [
+      {
+        "name": "inventory",
+        "keyPath": "item_id",
+        "indexes": [
+          { "name": "by-category", "keyPath": "category" },
+          { "name": "by-name", "keyPath": "item_name" }
+        ]
+      },
+      {
+        "name": "categories",
+        "keyPath": "category_id",
+        "indexes": [
+          { "name": "by-sort-order", "keyPath": "sort_order" }
+        ]
+      },
+      {
+        "name": "config",
+        "keyPath": "key",
+        "notes": "Single row, key='singleton'"
+      },
+      {
+        "name": "writeQueue",
+        "keyPath": "id",
+        "autoIncrement": true,
+        "indexes": [
+          { "name": "by-enqueued", "keyPath": "enqueuedAt" }
+        ],
+        "entry_shape": {
+          "operation": "'create' | 'update' | 'delete'",
+          "resource": "'inventory' | 'categories' | 'config'",
+          "resourceId": "string | null",
+          "payload": "Record<string, unknown>",
+          "enqueuedAt": "ISO timestamp"
+        }
+      }
+    ]
+  },
+
+  "frontend_components": {
+    "pages": [
+      {
+        "name": "LoginPage",
+        "file": "src/pages/LoginPage.tsx",
+        "route": "/login",
+        "description": "Sign in with Google button. Stores invite token from ?invite= in sessionStorage before OAuth redirect. Shows error messages for: not_authorized, invite_expired, invite_invalid, oauth_failed.",
+        "dependencies": ["src/lib/api.ts"]
+      },
+      {
+        "name": "ItemsPage",
+        "file": "src/pages/ItemsPage.tsx",
+        "route": "/items",
+        "description": "Main inventory list. Search + category filter (useMemo). Reads from IndexedDB via useInventory + useCategories. Auto-reloads after write queue flush via useWriteQueue.",
+        "dependencies": ["useInventory", "useCategories", "useWriteQueue", "ItemList", "SearchBar", "CategoryPills"]
+      },
+      {
+        "name": "ItemDetailPage",
+        "file": "src/pages/ItemDetailPage.tsx",
+        "route": "/items/:id",
+        "description": "Shows single item from IndexedDB. Edit button (edit+ role), Delete button (full+ role) with confirm dialog.",
+        "dependencies": ["useAuth", "src/lib/db.ts", "PriceCard"]
+      },
+      {
+        "name": "AddEditItemPage",
+        "file": "src/pages/AddEditItemPage.tsx",
+        "route": "/items/new, /items/:id/edit",
+        "description": "Loads existing item from IndexedDB for edit mode. Uploads icon via /api/upload/icon. Online: POST/PUT to API then putInventoryItem. Offline: queueWrite. friendlyUploadError() maps HTTP errors to human messages.",
+        "dependencies": ["useCategories", "useOffline", "src/lib/db.ts", "src/lib/writeQueue.ts", "src/lib/api.ts", "ItemForm"]
+      },
+      {
+        "name": "SettingsPage",
+        "file": "src/pages/SettingsPage.tsx",
+        "route": "/settings",
+        "description": "Manager-only (redirects non-managers). Loads staff from /api/staff and config from /api/config. Inline store name edit. CategoryManager + StaffList + InviteModal.",
+        "dependencies": ["useAuth", "src/lib/api.ts", "CategoryManager", "StaffList", "InviteModal"]
+      }
+    ],
+    "layout": [
+      {
+        "name": "AppShell",
+        "file": "src/components/layout/AppShell.tsx",
+        "description": "Root layout: TopBar + OfflineBanner + <main> + BottomNav"
+      },
+      {
+        "name": "TopBar",
+        "file": "src/components/layout/TopBar.tsx",
+        "description": "ShopStock brand + store name subtitle (from IndexedDB config) + AddButton + AvatarMenu"
+      },
+      {
+        "name": "BottomNav",
+        "file": "src/components/layout/BottomNav.tsx",
+        "description": "Items tab always visible. Settings tab visible only for manager role."
+      },
+      {
+        "name": "OfflineBanner",
+        "file": "src/components/layout/OfflineBanner.tsx",
+        "description": "Amber banner shown when useOffline() returns true"
+      }
+    ],
+    "hooks": [
+      {
+        "name": "useAuth",
+        "file": "src/hooks/useAuth.ts",
+        "description": "Fetches /api/me once on mount. Returns {user: SessionUser | null, loading, error}."
+      },
+      {
+        "name": "useOffline",
+        "file": "src/hooks/useOffline.ts",
+        "description": "Returns boolean. Tracks navigator.onLine + online/offline events."
+      },
+      {
+        "name": "useSync",
+        "file": "src/hooks/useSync.ts",
+        "description": "Calls /api/sync/full then seeds IndexedDB stores: clearAndSeedInventory, clearAndSeedCategories, setConfig."
+      },
+      {
+        "name": "useInventory",
+        "file": "src/hooks/useInventory.ts",
+        "description": "Reads all inventory from IndexedDB. Exposes reload() for post-mutation refresh."
+      },
+      {
+        "name": "useCategories",
+        "file": "src/hooks/useCategories.ts",
+        "description": "Reads categories from IndexedDB. Sorts: Misc always last. Exposes reload()."
+      },
+      {
+        "name": "useWriteQueue",
+        "file": "src/hooks/useWriteQueue.ts",
+        "description": "Detects offline→online transition. Calls flushWriteQueue() then onFlushed callback (triggers inventory reload)."
+      }
+    ],
+    "lib": [
+      {
+        "name": "db",
+        "file": "src/lib/db.ts",
+        "description": "Singleton getDB() via idb v8. Exports typed CRUD helpers for all 4 IndexedDB stores."
+      },
+      {
+        "name": "writeQueue",
+        "file": "src/lib/writeQueue.ts",
+        "description": "queueWrite() enqueues to IndexedDB. flushWriteQueue() processes in enqueuedAt order, calls correct API endpoint per operation+resource."
+      },
+      {
+        "name": "api",
+        "file": "src/lib/api.ts",
+        "description": "apiFetch() wrapper: Content-Type application/json, credentials: include, throws Error on non-OK, parses JSON."
+      },
+      {
+        "name": "imageCompress",
+        "file": "src/lib/imageCompress.ts",
+        "description": "Canvas resize: max 200px longest edge, JPEG quality 0.7. Returns Blob."
+      },
+      {
+        "name": "types",
+        "file": "src/lib/types.ts",
+        "description": "Shared TypeScript interfaces used by both frontend and API functions."
+      }
+    ]
+  },
+
+  "api_lib_modules": [
+    {
+      "name": "session",
+      "file": "api/_lib/session.ts",
+      "description": "iron-session config: cookie name shopstock-session, httpOnly, SameSite=Lax, secure in prod, 7-day maxAge. Exports getSession(), requireSession().",
+      "session_shape": { "gmail": "string", "display_name": "string", "role": "Role" }
+    },
+    {
+      "name": "sheets",
+      "file": "api/_lib/sheets.ts",
+      "description": "All Sheets CRUD for 4 tabs. GoogleAuth with service account credentials. initializeSheet() bootstraps tab structure on first manager login. allocateNextItemId() increments last_item_seq atomically (non-transactional).",
+      "known_issue": "Row-scan updates are O(n) and non-atomic. Two concurrent writes could corrupt data."
+    },
+    {
+      "name": "drive",
+      "file": "api/_lib/drive.ts",
+      "description": "checkDriveQuota() — returns {usedFraction, blocked} (blocked if >90%). Wrapped in try/catch because service accounts have no personal quota. uploadIconToDrive() — creates file, sets public reader permission, returns direct view URL.",
+      "public_url_pattern": "https://drive.google.com/uc?export=view&id={fileId}"
+    },
+    {
+      "name": "oauth",
+      "file": "api/_lib/oauth.ts",
+      "description": "getOAuthClient() builds OAuth2Client from env vars. OAUTH_SCOPES = ['openid', 'email', 'profile'] — identity only, no data access."
+    },
+    {
+      "name": "roles",
+      "file": "api/_lib/roles.ts",
+      "description": "Role hierarchy: view(0) < edit(1) < full(2) < manager(3). hasRole() and requireRole() guard for each endpoint."
+    }
+  ],
+
+  "data_flows": [
+    {
+      "name": "Login",
+      "steps": [
+        "User clicks Sign In → LoginPage stores invite token in sessionStorage",
+        "Redirect to /api/auth/login → generates Google consent URL (state=invite_token)",
+        "Google redirects to /api/auth/callback with code+state",
+        "Callback: exchanges code, fetches userinfo (gmail, display_name)",
+        "If invite state present: validates token, updates Staff row, activates user",
+        "If no Staff rows: bootstraps manager (initializeSheet + append manager row)",
+        "If existing staff: checks status=active, gets role",
+        "Sets iron-session cookie → redirects to /items"
+      ]
+    },
+    {
+      "name": "Full Sync (on login)",
+      "steps": [
+        "App.tsx detects authenticated user + online",
+        "useSync() calls GET /api/sync/full",
+        "API reads Inventory, Categories, Config tabs in parallel (Promise.all)",
+        "Returns SyncSnapshot",
+        "clearAndSeedInventory() replaces IndexedDB inventory store",
+        "clearAndSeedCategories() replaces IndexedDB categories store",
+        "setConfig() writes singleton config row"
+      ]
+    },
+    {
+      "name": "Add Item (online)",
+      "steps": [
+        "User fills ItemForm, optionally captures icon via camera",
+        "IconField compresses image: canvas resize to 200px, JPEG 0.7",
+        "POST /api/upload/icon (multipart) → Drive upload → returns {url}",
+        "POST /api/inventory with item fields + icon_url",
+        "API: allocateNextItemId, append row to Sheets",
+        "Response: {item: InventoryItem}",
+        "putInventoryItem() updates IndexedDB",
+        "Navigate to /items"
+      ]
+    },
+    {
+      "name": "Add Item (offline)",
+      "steps": [
+        "Icon upload is skipped (offline check in AddEditItemPage)",
+        "queueWrite('create', 'inventory', null, payload) enqueues to IndexedDB writeQueue",
+        "Navigate to /items (item not yet visible — no local item_id)",
+        "On reconnect: useWriteQueue detects online event",
+        "flushWriteQueue() processes entries in order → POST /api/inventory",
+        "onFlushed callback triggers useInventory reload"
+      ]
+    },
+    {
+      "name": "Invite Flow",
+      "steps": [
+        "Manager POSTs /api/staff {action: 'invite', role} → UUID token, 48h expiry, placeholder row in Sheets",
+        "Manager shares invite URL: /login?invite=TOKEN",
+        "Invitee opens URL → LoginPage stores token in sessionStorage",
+        "OAuth redirect passes token as state param",
+        "Callback receives state → POSTs to /api/join/[token] server-side",
+        "Token validated, Staff row updated with real gmail + status=active",
+        "Session set with correct role → redirected to /items"
+      ]
+    }
+  ],
+
+  "service_worker_strategy": {
+    "plugin": "vite-plugin-pwa (Workbox)",
+    "app_shell": "Precached on install (all JS/CSS/HTML)",
+    "navigate_fallback": "/index.html",
+    "navigate_fallback_denylist": ["/^\\/api/"],
+    "runtime_caching": [
+      {
+        "pattern": "/api/*",
+        "strategy": "NetworkOnly",
+        "reason": "Reads come from IndexedDB; API calls must be real-time or fail"
+      },
+      {
+        "pattern": "drive.google.com/uc*",
+        "strategy": "CacheFirst",
+        "cache_name": "item-icons",
+        "expiry": "30 days"
+      },
+      {
+        "pattern": "lh3.googleusercontent.com*",
+        "strategy": "CacheFirst",
+        "cache_name": "profile-images",
+        "expiry": "7 days"
+      }
+    ]
+  },
+
+  "role_system": {
+    "roles": ["view", "edit", "full", "manager"],
+    "hierarchy": "view(0) < edit(1) < full(2) < manager(3)",
+    "enforcement": "requireRole() in api/_lib/roles.ts called at top of each API handler",
+    "frontend_guards": [
+      "AddButton hidden for view role",
+      "Settings tab hidden for non-manager role",
+      "Delete button on ItemDetailPage hidden for view/edit roles",
+      "SettingsPage redirects non-managers to /items"
+    ]
+  },
+
+  "known_issues": [
+    {
+      "severity": "high",
+      "area": "Sheets concurrency",
+      "description": "Row-scan updates are non-atomic. Concurrent PUT requests could read stale row indices and overwrite wrong rows. No locking mechanism.",
+      "mitigation": "Acceptable for single-store low-concurrency usage. Would need Firestore/Postgres for multi-user high-write scenarios."
+    },
+    {
+      "severity": "high",
+      "area": "Offline item creation",
+      "description": "Items created offline have no local item_id — they don't appear in the IndexedDB inventory until the queue flushes online. User sees no optimistic feedback.",
+      "mitigation": "Could generate a temporary client-side UUID and reconcile on flush, but this adds complexity."
+    },
+    {
+      "severity": "medium",
+      "area": "Item ID allocation race condition",
+      "description": "allocateNextItemId() does read-then-write on Config!C2. Two simultaneous creates could get the same item_id.",
+      "mitigation": "Low risk for single-store. Fix would require Sheets conditional writes or a distributed counter."
+    },
+    {
+      "severity": "medium",
+      "area": "Invite token in state param",
+      "description": "OAuth state param is user-visible in browser URL and logs. Token is single-use and 48h expiry, limiting risk.",
+      "mitigation": "Acceptable. Alternative: store token server-side tied to a nonce."
+    },
+    {
+      "severity": "medium",
+      "area": "No write-queue conflict resolution",
+      "description": "Offline writes flush in timestamp order (last-write-wins). If two users edit the same item offline, one edit silently overwrites the other.",
+      "mitigation": "Acceptable for single-store. Add updated_at conflict detection for multi-user scenarios."
+    },
+    {
+      "severity": "low",
+      "area": "Drive quota check skipped for service accounts",
+      "description": "checkDriveQuota() catches the quota API error (service accounts have no personal storage) and returns {blocked: false}. Drive storage could fill up silently.",
+      "mitigation": "Implement folder-size check via Drive files.list instead of about.get quota."
+    },
+    {
+      "severity": "low",
+      "area": "Sheets init not idempotent",
+      "description": "initializeSheet() creates tabs and writes headers on first manager login. If called twice (e.g., network retry), could duplicate headers.",
+      "mitigation": "Add existence check before tab creation."
+    },
+    {
+      "severity": "low",
+      "area": "No IndexedDB schema migration",
+      "description": "idb database is version 1 with no upgrade path. Any schema change requires clearing the database or incrementing the version with manual migration logic.",
+      "mitigation": "Implement onupgradeneeded migration handlers before shipping version 2."
+    },
+    {
+      "severity": "low",
+      "area": "Session not refreshed on role change",
+      "description": "If a manager changes a staff member's role in Sheets, that user's session cookie still carries the old role until they log out and back in.",
+      "mitigation": "Add role re-validation in requireSession() against Sheets on each request (adds latency)."
+    }
+  ],
+
+  "constraints": {
+    "vercel_hobby_function_limit": 12,
+    "current_function_count": 11,
+    "remaining_function_slots": 1,
+    "sheets_write_pattern": "Row-scan (O(n) reads per write)",
+    "icon_upload": "Online only — skipped when offline",
+    "item_id_format": "Zero-padded 3-digit integer (e.g. 007, 012)",
+    "category_id_format": "CAT### (e.g. CAT001)",
+    "session_duration": "7 days",
+    "invite_expiry": "48 hours",
+    "image_max_size": "200x200px, JPEG 0.7 quality",
+    "misc_category": "Cannot be deleted, always sorted last"
+  },
+
+  "file_map": {
+    "config": {
+      "vite.config.ts": "Vite + VitePWA plugin + path alias @/ → ./src/",
+      "tailwind.config.js": "Tailwind v3, custom teal palette, content: src/**/*.{js,ts,jsx,tsx}",
+      "tsconfig.app.json": "Frontend TS config, baseUrl + paths for @/ alias, ignoreDeprecations 6.0",
+      "api/tsconfig.json": "API TS config: module=commonjs, moduleResolution=node, includes api/**/*.ts + ../src/lib/types.ts",
+      "api/package.json": "{ type: commonjs } — overrides root ESM for Vercel function compilation",
+      "vercel.json": "SPA rewrite: all non-/api/* paths → /index.html",
+      ".env.local": "Local dev environment variables (gitignored)",
+      ".env.example": "Template for required env vars"
+    },
+    "frontend_pages": {
+      "src/pages/LoginPage.tsx": "OAuth entry, invite token handling",
+      "src/pages/ItemsPage.tsx": "Inventory list with search + category filter",
+      "src/pages/ItemDetailPage.tsx": "Single item view with role-gated actions",
+      "src/pages/AddEditItemPage.tsx": "Item create/edit form with icon upload",
+      "src/pages/SettingsPage.tsx": "Manager-only settings hub"
+    },
+    "frontend_components": {
+      "src/components/layout/AppShell.tsx": "Root layout wrapper",
+      "src/components/layout/TopBar.tsx": "Header with brand + store name + actions",
+      "src/components/layout/BottomNav.tsx": "Tab navigation",
+      "src/components/layout/OfflineBanner.tsx": "Offline status indicator",
+      "src/components/auth/AvatarMenu.tsx": "User avatar + sign out dropdown",
+      "src/components/items/AddButton.tsx": "FAB for adding items (hidden for view role)",
+      "src/components/items/CategoryPills.tsx": "Horizontal scrolling category filter",
+      "src/components/items/ItemCard.tsx": "List item card with icon fallback",
+      "src/components/items/ItemList.tsx": "Virtualized item list with loading skeleton",
+      "src/components/items/PriceCard.tsx": "Base/retail/wholesale price display",
+      "src/components/items/SearchBar.tsx": "Search input with clear button",
+      "src/components/forms/ItemForm.tsx": "Full item create/edit form",
+      "src/components/forms/IconField.tsx": "Camera capture + compress + preview",
+      "src/components/settings/CategoryManager.tsx": "Category CRUD (updates IndexedDB immediately on API success)",
+      "src/components/settings/StaffList.tsx": "Staff display with revoke action",
+      "src/components/settings/InviteModal.tsx": "Generate and display invite link"
+    },
+    "api_functions": {
+      "api/auth/[action].ts": "login + callback + logout (consolidated to save function slots)",
+      "api/me.ts": "Session user endpoint",
+      "api/sync/full.ts": "Full IndexedDB seed snapshot",
+      "api/inventory/index.ts": "GET all items + POST create (merged from items/create.ts)",
+      "api/inventory/[id].ts": "GET/PUT/DELETE single item",
+      "api/categories/index.ts": "GET + POST categories",
+      "api/categories/[id].ts": "PUT/DELETE category",
+      "api/staff/index.ts": "GET + POST invite/revoke (consolidated from staff/invite.ts + staff/revoke.ts)",
+      "api/config/index.ts": "GET + PUT config",
+      "api/upload/icon.ts": "Multipart icon upload to Drive",
+      "api/join/[token].ts": "Invite token activation"
+    },
+    "api_lib": {
+      "api/_lib/session.ts": "iron-session helpers",
+      "api/_lib/sheets.ts": "Google Sheets CRUD for all 4 tabs",
+      "api/_lib/drive.ts": "Google Drive upload + quota check",
+      "api/_lib/oauth.ts": "OAuth2Client construction",
+      "api/_lib/roles.ts": "Role hierarchy enforcement"
+    }
+  }
+}

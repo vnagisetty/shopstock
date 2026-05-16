@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireSession } from '../_lib/session'
 import { requireRole } from '../_lib/roles'
 import { getAllCategories, appendCategory, getNextCategoryId, getNextCategorySortOrder } from '../_lib/sheets'
+import { trackAction } from '../_lib/analytics'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const user = await requireSession(req, res)
@@ -26,6 +27,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const sort_order = await getNextCategorySortOrder()
       const cat = { category_id, category_name: category_name.trim(), sort_order, created_at: new Date().toISOString() }
       await appendCategory(cat)
+      trackAction(user, 'add_category')
       res.status(201).json({ category: cat })
     } catch (e: unknown) {
       res.status(500).json({ error: String(e) })

@@ -4,6 +4,7 @@ import { ArrowLeft, Edit2, Trash2 } from 'lucide-react'
 import { PriceCard } from '@/components/items/PriceCard'
 import { getDB } from '@/lib/db'
 import { apiFetch } from '@/lib/api'
+import { trackRead } from '@/lib/analytics'
 import type { InventoryItem, SessionUser } from '@/lib/types'
 
 interface Props {
@@ -16,6 +17,10 @@ export function ItemDetailPage({ user }: Props) {
   const [item, setItem] = useState<InventoryItem | null>(null)
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
+
+  useEffect(() => {
+    trackRead('view_item')
+  }, [])
 
   useEffect(() => {
     if (!id) return

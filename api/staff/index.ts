@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireSession } from '../_lib/session'
 import { requireRole } from '../_lib/roles'
 import { getAllStaff, appendStaff, getStaffByGmail, updateStaff } from '../_lib/sheets'
+import { trackAction } from '../_lib/analytics'
 import { v4 as uuidv4 } from 'uuid'
 import type { Role } from '../../src/lib/types'
 
@@ -45,6 +46,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         })
         const baseUrl = process.env.GOOGLE_REDIRECT_URI?.replace('/api/auth/callback', '') ?? ''
         const inviteUrl = `${baseUrl}/login?invite=${token}`
+        trackAction(user, 'invite_staff')
         return res.status(200).json({ inviteUrl, token, expires })
       } catch (e: unknown) {
         return res.status(500).json({ error: String(e) })
@@ -59,6 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!staff) return res.status(404).json({ error: 'Staff member not found' })
         if (staff.role === 'manager') return res.status(400).json({ error: 'Cannot revoke manager' })
         await updateStaff({ ...staff, status: 'revoked' })
+        trackAction(user, 'revoke_staff')
         return res.status(200).json({ ok: true })
       } catch (e: unknown) {
         return res.status(500).json({ error: String(e) })

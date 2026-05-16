@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ShopStock — Architecture Map</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { background: #0a0f1e; color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; margin: 0; overflow: hidden; height: 100vh; }
+  #canvas-wrap { overflow: auto; height: calc(100vh - 60px); cursor: grab; user-select: none; }
+  #canvas-wrap:active { cursor: grabbing; }
+  #canvas { position: relative; width: 1800px; padding: 32px; }
+  .layer { border-radius: 16px; padding: 20px; margin-bottom: 8px; position: relative; }
+  .layer-label { font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; opacity: 0.5; margin-bottom: 12px; }
+  .node { display: inline-flex; flex-direction: column; align-items: flex-start; padding: 10px 14px; border-radius: 10px; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; min-width: 120px; margin: 4px; vertical-align: top; }
+  .node:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+  .node.selected { border-color: #fff !important; box-shadow: 0 0 0 2px rgba(255,255,255,0.3); }
+  .node-icon { font-size: 16px; margin-bottom: 4px; }
+  .node-label { font-size: 11px; font-weight: 600; line-height: 1.3; }
+  .node-sub { font-size: 9px; opacity: 0.6; margin-top: 2px; }
+  .badge { font-size: 9px; padding: 1px 6px; border-radius: 99px; font-weight: 600; display: inline-block; margin-top: 4px; }
+  .arrow-section { display: flex; align-items: center; justify-content: center; height: 36px; gap: 8px; }
+  .arrow-line { display: flex; flex-direction: column; align-items: center; }
+  .arrow-label { font-size: 9px; opacity: 0.5; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2px; }
+  .arrow-svg { opacity: 0.4; }
+  #detail { position: fixed; top: 60px; right: 0; width: 320px; height: calc(100vh - 60px); background: #111827; border-left: 1px solid #1f2937; overflow-y: auto; transform: translateX(320px); transition: transform 0.3s ease; z-index: 100; padding: 20px; }
+  #detail.open { transform: translateX(0); }
+  .detail-tag { font-size: 10px; padding: 2px 8px; border-radius: 99px; display: inline-block; margin: 2px; }
+  .issue-item { background: #1f2937; border-left: 3px solid; border-radius: 0 8px 8px 0; padding: 8px 12px; margin-bottom: 6px; font-size: 11px; cursor: default; }
+  #sidebar { position: fixed; top: 60px; left: 0; width: 220px; height: calc(100vh - 60px); background: #0d1117; border-right: 1px solid #1f2937; overflow-y: auto; z-index: 50; padding: 16px 12px; }
+  .nav-item { padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 11px; font-weight: 500; margin-bottom: 2px; display: flex; align-items: center; gap: 8px; transition: background 0.15s; }
+  .nav-item:hover { background: #1f2937; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .flow-line { height: 2px; flex: 1; background: linear-gradient(90deg, transparent, rgba(99,102,241,0.5), transparent); }
+  /* Layer colors */
+  .l-client { background: rgba(30,27,75,0.6); border: 1px solid rgba(99,102,241,0.3); }
+  .l-storage { background: rgba(6,78,59,0.4); border: 1px solid rgba(16,185,129,0.3); }
+  .l-api { background: rgba(7,47,74,0.5); border: 1px solid rgba(14,165,233,0.3); }
+  .l-lib { background: rgba(15,23,42,0.8); border: 1px solid rgba(100,116,139,0.3); }
+  .l-ext { background: rgba(67,20,7,0.5); border: 1px solid rgba(249,115,22,0.4); }
+  /* Node colors */
+  .n-page { background: #312e81; border-color: #4f46e5; }
+  .n-component { background: #1e3a5f; border-color: #3b82f6; }
+  .n-hook { background: #134e4a; border-color: #14b8a6; }
+  .n-clientlib { background: #2d1b69; border-color: #8b5cf6; }
+  .n-idb { background: #064e3b; border-color: #10b981; }
+  .n-route { background: #0c4a6e; border-color: #0ea5e9; }
+  .n-apilib { background: #1e293b; border-color: #64748b; }
+  .n-ext { background: #431407; border-color: #f97316; }
+  .n-oauth { background: #4c0519; border-color: #f43f5e; }
+  .issue-critical { border-color: #ef4444; }
+  .issue-warning { border-color: #f59e0b; }
+  .issue-info { border-color: #3b82f6; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="fixed top-0 left-0 right-0 h-14 z-50 flex items-center px-4 gap-4" style="background:#060b18;border-bottom:1px solid #1f2937">
+  <div class="flex items-center gap-2">
+    <div class="w-7 h-7 rounded-lg flex items-center justify-center text-sm" style="background:#00897B">🏷️</div>
+    <span class="font-bold text-white text-sm">ShopStock</span>
+    <span class="text-gray-500 text-xs ml-1">Architecture Map</span>
+  </div>
+  <div class="flex gap-3 ml-4">
+    <span class="text-xs px-2 py-1 rounded-md" style="background:#1e3a5f;color:#60a5fa">React 19 + Vite</span>
+    <span class="text-xs px-2 py-1 rounded-md" style="background:#064e3b;color:#34d399">Vercel Serverless</span>
+    <span class="text-xs px-2 py-1 rounded-md" style="background:#431407;color:#fb923c">Google APIs</span>
+    <span class="text-xs px-2 py-1 rounded-md" style="background:#134e4a;color:#2dd4bf">IndexedDB + PWA</span>
+  </div>
+  <div class="ml-auto flex gap-4 text-xs text-gray-400">
+    <span>📄 <b class="text-white">11</b> API routes</span>
+    <span>🧩 <b class="text-white">13</b> components</span>
+    <span>🎣 <b class="text-white">6</b> hooks</span>
+    <span>💾 <b class="text-white">4</b> DB stores</span>
+    <span>⚠️ <b class="text-yellow-400">12</b> issues</span>
+    <button id="zoom-in" class="px-2 py-1 rounded text-white" style="background:#1f2937">＋</button>
+    <button id="zoom-out" class="px-2 py-1 rounded text-white" style="background:#1f2937">－</button>
+    <button id="zoom-reset" class="px-2 py-1 rounded text-white text-xs" style="background:#1f2937">Reset</button>
+  </div>
+</header>
+
+<!-- SIDEBAR -->
+<div id="sidebar">
+  <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Layers</div>
+  <div class="nav-item" onclick="scrollToLayer('layer-client')"><div class="dot" style="background:#6366f1"></div>Browser / PWA</div>
+  <div class="nav-item" onclick="scrollToLayer('layer-storage')"><div class="dot" style="background:#10b981"></div>IndexedDB</div>
+  <div class="nav-item" onclick="scrollToLayer('layer-api')"><div class="dot" style="background:#0ea5e9"></div>Vercel API</div>
+  <div class="nav-item" onclick="scrollToLayer('layer-lib')"><div class="dot" style="background:#64748b"></div>API Utilities</div>
+  <div class="nav-item" onclick="scrollToLayer('layer-ext')"><div class="dot" style="background:#f97316"></div>Google Services</div>
+
+  <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mt-5 mb-3">Data Flows</div>
+  <div class="text-xs text-gray-400 leading-relaxed px-2">
+    <div class="mb-2 flex gap-2 items-start"><span>🔐</span><span>OAuth login → session cookie → auth gate</span></div>
+    <div class="mb-2 flex gap-2 items-start"><span>🔄</span><span>Login sync → Sheets → IndexedDB</span></div>
+    <div class="mb-2 flex gap-2 items-start"><span>📖</span><span>All reads → IndexedDB (offline-first)</span></div>
+    <div class="mb-2 flex gap-2 items-start"><span>✍️</span><span>Writes → API → Sheets</span></div>
+    <div class="mb-2 flex gap-2 items-start"><span>📵</span><span>Offline writes → queue → flush on reconnect</span></div>
+    <div class="mb-2 flex gap-2 items-start"><span>🖼️</span><span>Icon → compress → Drive → public URL</span></div>
+  </div>
+
+  <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mt-5 mb-3">Issues</div>
+  <div class="issue-item issue-critical mb-1">⚡ No Sheets transaction isolation</div>
+  <div class="issue-item issue-critical mb-1">⚡ Row-scan on every update O(n)</div>
+  <div class="issue-item issue-warning mb-1">⚠ Custom multipart parser</div>
+  <div class="issue-item issue-warning mb-1">⚠ Offline create: no item_id</div>
+  <div class="issue-item issue-warning mb-1">⚠ Queue stops on first error</div>
+  <div class="issue-item issue-warning mb-1">⚠ No optimistic UI updates</div>
+  <div class="issue-item issue-warning mb-1">⚠ Sync errors not shown in UI</div>
+  <div class="issue-item issue-info mb-1">ℹ Session expires in 7d (no refresh)</div>
+  <div class="issue-item issue-info mb-1">ℹ Drive links permanent (no cleanup)</div>
+  <div class="issue-item issue-info mb-1">ℹ No rate limiting on API routes</div>
+  <div class="issue-item issue-info mb-1">ℹ Icon dimensions hardcoded 200px</div>
+  <div class="issue-item issue-info mb-1">ℹ No batch write endpoints</div>
+</div>
+
+<!-- MAIN CANVAS -->
+<div id="canvas-wrap" style="margin-left:220px;margin-right:0">
+  <div id="canvas-inner" style="transform-origin: 0 0; transition: transform 0.1s">
+    <div id="canvas">
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- LAYER 1: BROWSER / PWA CLIENT              -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="layer-client" class="layer l-client">
+      <div class="layer-label">🌐 Layer 1 — Browser / PWA Client (React 19 + Vite + TypeScript)</div>
+
+      <!-- PAGES ROW -->
+      <div class="mb-2">
+        <div class="text-xs text-indigo-300 opacity-60 mb-1 ml-1">Pages (React Router v7)</div>
+        <div class="flex flex-wrap">
+          <div class="node n-page" onclick="showDetail('loginPage')" id="n-loginPage">
+            <span class="node-icon">🔐</span>
+            <span class="node-label">LoginPage</span>
+            <span class="node-sub">src/pages/LoginPage.tsx</span>
+            <span class="badge" style="background:#4338ca;color:#c7d2fe">OAuth entry</span>
+          </div>
+          <div class="node n-page" onclick="showDetail('itemsPage')" id="n-itemsPage">
+            <span class="node-icon">📦</span>
+            <span class="node-label">ItemsPage</span>
+            <span class="node-sub">src/pages/ItemsPage.tsx</span>
+            <span class="badge" style="background:#4338ca;color:#c7d2fe">Main view</span>
+          </div>
+          <div class="node n-page" onclick="showDetail('itemDetailPage')" id="n-itemDetailPage">
+            <span class="node-icon">🔍</span>
+            <span class="node-label">ItemDetailPage</span>
+            <span class="node-sub">src/pages/ItemDetailPage.tsx</span>
+          </div>
+          <div class="node n-page" onclick="showDetail('addEditPage')" id="n-addEditPage">
+            <span class="node-icon">✏️</span>
+            <span class="node-label">AddEditItemPage</span>
+            <span class="node-sub">src/pages/AddEditItemPage.tsx</span>
+            <span class="badge" style="background:#dc2626;color:#fecaca">Offline-aware</span>
+          </div>
+          <div class="node n-page" onclick="showDetail('settingsPage')" id="n-settingsPage">
+            <span class="node-icon">⚙️</span>
+            <span class="node-label">SettingsPage</span>
+            <span class="node-sub">src/pages/SettingsPage.tsx</span>
+            <span class="badge" style="background:#7c3aed;color:#ddd6fe">manager only</span>
+          </div>
+          <div class="node n-component" style="background:#1e1b4b;border-color:#6366f1" onclick="showDetail('appTsx')" id="n-appTsx">
+            <span class="node-icon">⚛️</span>
+            <span class="node-label">App.tsx</span>
+            <span class="node-sub">Router + Auth gate</span>
+            <span class="badge" style="background:#4338ca;color:#c7d2fe">entry point</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- COMPONENTS ROW -->
+      <div class="mb-2">
+        <div class="text-xs text-blue-300 opacity-60 mb-1 ml-1">Components</div>
+        <div class="flex flex-wrap">
+          <!-- Layout group -->
+          <div style="background:rgba(30,58,138,0.3);border:1px solid rgba(59,130,246,0.2);border-radius:10px;padding:8px;margin:4px">
+            <div class="text-xs text-blue-400 opacity-50 mb-1">Layout</div>
+            <div class="node n-component" onclick="showDetail('appShell')" id="n-appShell" style="min-width:90px">
+              <span class="node-icon">🏗️</span><span class="node-label">AppShell</span>
+            </div>
+            <div class="node n-component" onclick="showDetail('topBar')" id="n-topBar" style="min-width:90px">
+              <span class="node-icon">📌</span><span class="node-label">TopBar</span>
+            </div>
+            <div class="node n-component" onclick="showDetail('bottomNav')" id="n-bottomNav" style="min-width:90px">
+              <span class="node-icon">🗂️</span><span class="node-label">BottomNav</span>
+            </div>
+            <div class="node n-component" onclick="showDetail('offlineBanner')" id="n-offlineBanner" style="min-width:90px">
+              <span class="node-icon">📵</span><span class="node-label">OfflineBanner</span>
+            </div>
+          </div>
+          <!-- Items group -->
+          <div style="background:rgba(7,89,133,0.3);border:1px solid rgba(14,165,233,0.2);border-radius:10px;padding:8px;margin:4px">
+            <div class="text-xs text-sky-400 opacity-50 mb-1">Items</div>
+            <div class="node n-component" onclick="showDetail('itemList')" id="n-itemList" style="min-width:90px">
+              <span class="node-icon">📋</span><span class="node-label">ItemList</span>
+            </div>
+            <div class="node n-component" onclick="showDetail('itemCard')" id="n-itemCard" style="min-width:90px">
+              <span class="node-icon">🃏</span><span class="node-label">ItemCard</span>
+            </div>
+            <div class="node n-component" onclick="showDetail('categoryPills')" id="n-categoryPills" style="min-width:90px">
+              <span class="node-icon">💊</span><span class="node-label">CategoryPills</span>
+            </div>
+            <div class="node n-component" onclick="showDetail('searchBar')" id="n-searchBar" style="min-width:90px">
+              <span class="node-icon">🔎</span><span class="node-label">SearchBar</span>
+            </div>
+            <div class="node n-component" onclick="showDetail('priceCard')" id="n-priceCard" style="min-width:90px">
+              <span class="node-icon">💲</span><span class="node-label">PriceCard</span>
+            </div>
+            <div class="node n-component" onclick="showDetail('addButton')" id="n-addButton" style="min-width:90px">
+              <span class="node-icon">➕</span><span class="node-label">AddButton</span>
+            </div>
+          </div>
+          <!-- Forms group -->
+          <div style="background:rgba(88,28,135,0.3);border:1px solid rgba(139,92,246,0.2);border-radius:10px;padding:8px;margin:4px">
+            <div class="text-xs text-violet-400 opacity-50 mb-1">Forms</div>
+            <div class="node n-component" onclick="showDetail('itemForm')" id="n-itemForm" style="min-width:90px">
+              <span class="node-icon">📝</span><span class="node-label">ItemForm</span>
+            </div>
+            <div class="node n-component" onclick="showDetail('iconField')" id="n-iconField" style="min-width:90px">
+              <span class="node-icon">📷</span><span class="node-label">IconField</span>
+            </div>
+          </div>
+          <!-- Settings group -->
+          <div style="background:rgba(20,83,45,0.4);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:8px;margin:4px">
+            <div class="text-xs text-green-400 opacity-50 mb-1">Settings</div>
+            <div class="node n-component" onclick="showDetail('staffList')" id="n-staffList" style="min-width:90px">
+              <span class="node-icon">👥</span><span class="node-label">StaffList</span>
+            </div>
+            <div class="node n-component" onclick="showDetail('inviteModal')" id="n-inviteModal" style="min-width:90px">
+              <span class="node-icon">📨</span><span class="node-label">InviteModal</span>
+            </div>
+            <div class="node n-component" onclick="showDetail('categoryManager')" id="n-categoryManager" style="min-width:90px">
+              <span class="node-icon">🗃️</span><span class="node-label">CategoryManager</span>
+            </div>
+          </div>
+          <!-- Auth -->
+          <div style="background:rgba(67,20,7,0.4);border:1px solid rgba(249,115,22,0.2);border-radius:10px;padding:8px;margin:4px">
+            <div class="text-xs text-orange-400 opacity-50 mb-1">Auth</div>
+            <div class="node n-component" onclick="showDetail('avatarMenu')" id="n-avatarMenu" style="min-width:90px">
+              <span class="node-icon">👤</span><span class="node-label">AvatarMenu</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- HOOKS + CLIENT LIB ROW -->
+      <div class="flex gap-4">
+        <div>
+          <div class="text-xs text-teal-300 opacity-60 mb-1 ml-1">Custom Hooks</div>
+          <div class="flex flex-wrap">
+            <div class="node n-hook" onclick="showDetail('useAuth')" id="n-useAuth">
+              <span class="node-icon">🔑</span><span class="node-label">useAuth</span><span class="node-sub">/api/me</span>
+            </div>
+            <div class="node n-hook" onclick="showDetail('useInventory')" id="n-useInventory">
+              <span class="node-icon">📦</span><span class="node-label">useInventory</span><span class="node-sub">IndexedDB</span>
+            </div>
+            <div class="node n-hook" onclick="showDetail('useCategories')" id="n-useCategories">
+              <span class="node-icon">🏷️</span><span class="node-label">useCategories</span><span class="node-sub">IndexedDB</span>
+            </div>
+            <div class="node n-hook" onclick="showDetail('useOffline')" id="n-useOffline">
+              <span class="node-icon">📡</span><span class="node-label">useOffline</span><span class="node-sub">navigator.onLine</span>
+            </div>
+            <div class="node n-hook" onclick="showDetail('useSync')" id="n-useSync">
+              <span class="node-icon">🔄</span><span class="node-label">useSync</span><span class="node-sub">/api/sync/full</span>
+            </div>
+            <div class="node n-hook" onclick="showDetail('useWriteQueue')" id="n-useWriteQueue">
+              <span class="node-icon">⏳</span><span class="node-label">useWriteQueue</span><span class="node-sub">flush on reconnect</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="text-xs text-violet-300 opacity-60 mb-1 ml-1">Client Libraries (src/lib/)</div>
+          <div class="flex flex-wrap">
+            <div class="node n-clientlib" onclick="showDetail('typesTs')" id="n-typesTs">
+              <span class="node-icon">📐</span><span class="node-label">types.ts</span><span class="node-sub">Shared interfaces</span>
+            </div>
+            <div class="node n-clientlib" onclick="showDetail('dbTs')" id="n-dbTs">
+              <span class="node-icon">💾</span><span class="node-label">db.ts</span><span class="node-sub">idb wrapper</span>
+            </div>
+            <div class="node n-clientlib" onclick="showDetail('apiTs')" id="n-apiTs">
+              <span class="node-icon">🌐</span><span class="node-label">api.ts</span><span class="node-sub">apiFetch()</span>
+            </div>
+            <div class="node n-clientlib" onclick="showDetail('writeQueueTs')" id="n-writeQueueTs">
+              <span class="node-icon">📝</span><span class="node-label">writeQueue.ts</span><span class="node-sub">Offline queue</span>
+            </div>
+            <div class="node n-clientlib" onclick="showDetail('imageCompressTs')" id="n-imageCompressTs">
+              <span class="node-icon">🖼️</span><span class="node-label">imageCompress.ts</span><span class="node-sub">Canvas → JPEG</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ARROWS 1→2 -->
+    <div class="arrow-section">
+      <div class="arrow-line"><div class="arrow-label">IndexedDB Read/Write</div>
+        <svg width="200" height="20" class="arrow-svg"><line x1="0" y1="10" x2="180" y2="10" stroke="#10b981" stroke-width="1.5" stroke-dasharray="4,3"/><polygon points="180,6 200,10 180,14" fill="#10b981"/></svg>
+      </div>
+      <div class="flow-line"></div>
+      <div class="arrow-line"><div class="arrow-label">HTTP fetch (credentials)</div>
+        <svg width="200" height="20" class="arrow-svg"><line x1="0" y1="10" x2="180" y2="10" stroke="#0ea5e9" stroke-width="1.5" stroke-dasharray="4,3"/><polygon points="180,6 200,10 180,14" fill="#0ea5e9"/></svg>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- LAYER 2: LOCAL STORAGE (IndexedDB)         -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="layer-storage" class="layer l-storage">
+      <div class="layer-label">💾 Layer 2 — Client Storage (IndexedDB via idb v8 — shopstock-db v1)</div>
+      <div class="flex gap-3 flex-wrap">
+        <div class="node n-idb" onclick="showDetail('idbInventory')" id="n-idbInventory">
+          <span class="node-icon">📦</span>
+          <span class="node-label">inventory store</span>
+          <span class="node-sub">keyPath: item_id</span>
+          <span class="badge" style="background:#065f46;color:#6ee7b7">idx: category, name</span>
+        </div>
+        <div class="node n-idb" onclick="showDetail('idbCategories')" id="n-idbCategories">
+          <span class="node-icon">🏷️</span>
+          <span class="node-label">categories store</span>
+          <span class="node-sub">keyPath: category_id</span>
+          <span class="badge" style="background:#065f46;color:#6ee7b7">idx: sort_order</span>
+        </div>
+        <div class="node n-idb" onclick="showDetail('idbConfig')" id="n-idbConfig">
+          <span class="node-icon">⚙️</span>
+          <span class="node-label">config store</span>
+          <span class="node-sub">key: 'singleton'</span>
+          <span class="badge" style="background:#065f46;color:#6ee7b7">single row</span>
+        </div>
+        <div class="node n-idb" onclick="showDetail('idbWriteQueue')" id="n-idbWriteQueue">
+          <span class="node-icon">⏳</span>
+          <span class="node-label">writeQueue store</span>
+          <span class="node-sub">autoIncrement id</span>
+          <span class="badge" style="background:#dc2626;color:#fecaca">offline writes</span>
+        </div>
+
+        <!-- Service Worker -->
+        <div class="node" style="background:#1c1917;border:1px solid #57534e;min-width:140px" onclick="showDetail('sw')">
+          <span class="node-icon">⚡</span>
+          <span class="node-label">Service Worker</span>
+          <span class="node-sub">Workbox (auto-update)</span>
+          <span class="badge" style="background:#292524;color:#a8a29e">precache: app shell</span>
+          <span class="badge" style="background:#292524;color:#a8a29e">runtime: Drive images</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ARROWS 2→3 -->
+    <div class="arrow-section">
+      <div class="arrow-line"><div class="arrow-label">REST API calls (JSON, iron-session cookie)</div>
+        <svg width="300" height="20" class="arrow-svg"><line x1="0" y1="10" x2="280" y2="10" stroke="#0ea5e9" stroke-width="2" stroke-dasharray="5,3"/><polygon points="280,5 300,10 280,15" fill="#0ea5e9"/></svg>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- LAYER 3: VERCEL SERVERLESS API             -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="layer-api" class="layer l-api">
+      <div class="layer-label">☁️ Layer 3 — Vercel Serverless Functions (Node.js CommonJS · 11/12 limit used)</div>
+      <div class="flex flex-wrap gap-2">
+
+        <!-- Auth group -->
+        <div style="background:rgba(76,5,25,0.4);border:1px solid rgba(244,63,94,0.3);border-radius:10px;padding:10px;margin:2px">
+          <div class="text-xs text-rose-400 opacity-60 mb-2">Auth</div>
+          <div class="node n-route" onclick="showDetail('routeAuth')" id="n-routeAuth" style="background:#4c0519;border-color:#f43f5e">
+            <span class="node-icon">🔐</span>
+            <span class="node-label">auth/[action].ts</span>
+            <span class="node-sub">GET login · GET callback · POST logout</span>
+          </div>
+          <div class="node n-route" onclick="showDetail('routeMe')" id="n-routeMe">
+            <span class="node-icon">👤</span>
+            <span class="node-label">me.ts</span>
+            <span class="node-sub">GET — session user</span>
+          </div>
+        </div>
+
+        <!-- Sync -->
+        <div style="background:rgba(7,47,74,0.4);border:1px solid rgba(14,165,233,0.3);border-radius:10px;padding:10px;margin:2px">
+          <div class="text-xs text-sky-400 opacity-60 mb-2">Sync</div>
+          <div class="node n-route" onclick="showDetail('routeSync')" id="n-routeSync">
+            <span class="node-icon">🔄</span>
+            <span class="node-label">sync/full.ts</span>
+            <span class="node-sub">GET — full IndexedDB snapshot</span>
+            <span class="badge" style="background:#0c4a6e;color:#7dd3fc">parallel reads</span>
+          </div>
+        </div>
+
+        <!-- Inventory -->
+        <div style="background:rgba(7,47,74,0.4);border:1px solid rgba(14,165,233,0.3);border-radius:10px;padding:10px;margin:2px">
+          <div class="text-xs text-sky-400 opacity-60 mb-2">Inventory</div>
+          <div class="node n-route" onclick="showDetail('routeInvIndex')" id="n-routeInvIndex">
+            <span class="node-icon">📋</span>
+            <span class="node-label">inventory/index.ts</span>
+            <span class="node-sub">GET list · POST create</span>
+            <span class="badge" style="background:#075985;color:#7dd3fc">edit role</span>
+          </div>
+          <div class="node n-route" onclick="showDetail('routeInvId')" id="n-routeInvId">
+            <span class="node-icon">📄</span>
+            <span class="node-label">inventory/[id].ts</span>
+            <span class="node-sub">GET · PUT (edit) · DELETE (full)</span>
+          </div>
+        </div>
+
+        <!-- Categories -->
+        <div style="background:rgba(7,47,74,0.4);border:1px solid rgba(14,165,233,0.3);border-radius:10px;padding:10px;margin:2px">
+          <div class="text-xs text-sky-400 opacity-60 mb-2">Categories</div>
+          <div class="node n-route" onclick="showDetail('routeCatIndex')" id="n-routeCatIndex">
+            <span class="node-icon">🏷️</span>
+            <span class="node-label">categories/index.ts</span>
+            <span class="node-sub">GET · POST (manager)</span>
+          </div>
+          <div class="node n-route" onclick="showDetail('routeCatId')" id="n-routeCatId">
+            <span class="node-icon">🏷️</span>
+            <span class="node-label">categories/[id].ts</span>
+            <span class="node-sub">PUT · DELETE (blocks Misc)</span>
+          </div>
+        </div>
+
+        <!-- Staff -->
+        <div style="background:rgba(7,47,74,0.4);border:1px solid rgba(14,165,233,0.3);border-radius:10px;padding:10px;margin:2px">
+          <div class="text-xs text-sky-400 opacity-60 mb-2">Staff</div>
+          <div class="node n-route" onclick="showDetail('routeStaff')" id="n-routeStaff">
+            <span class="node-icon">👥</span>
+            <span class="node-label">staff/index.ts</span>
+            <span class="node-sub">GET list · POST invite · POST revoke</span>
+            <span class="badge" style="background:#7c3aed;color:#ddd6fe">manager only</span>
+          </div>
+        </div>
+
+        <!-- Config -->
+        <div style="background:rgba(7,47,74,0.4);border:1px solid rgba(14,165,233,0.3);border-radius:10px;padding:10px;margin:2px">
+          <div class="text-xs text-sky-400 opacity-60 mb-2">Config</div>
+          <div class="node n-route" onclick="showDetail('routeConfig')" id="n-routeConfig">
+            <span class="node-icon">⚙️</span>
+            <span class="node-label">config/index.ts</span>
+            <span class="node-sub">GET · PUT (manager)</span>
+          </div>
+        </div>
+
+        <!-- Upload -->
+        <div style="background:rgba(67,20,7,0.4);border:1px solid rgba(249,115,22,0.3);border-radius:10px;padding:10px;margin:2px">
+          <div class="text-xs text-orange-400 opacity-60 mb-2">Upload</div>
+          <div class="node n-route" style="background:#431407;border-color:#f97316" onclick="showDetail('routeUpload')" id="n-routeUpload">
+            <span class="node-icon">📤</span>
+            <span class="node-label">upload/icon.ts</span>
+            <span class="node-sub">POST — multipart → Drive</span>
+            <span class="badge" style="background:#dc2626;color:#fecaca">custom parser</span>
+          </div>
+        </div>
+
+        <!-- Join -->
+        <div style="background:rgba(7,47,74,0.4);border:1px solid rgba(14,165,233,0.3);border-radius:10px;padding:10px;margin:2px">
+          <div class="text-xs text-sky-400 opacity-60 mb-2">Invite</div>
+          <div class="node n-route" onclick="showDetail('routeJoin')" id="n-routeJoin">
+            <span class="node-icon">🔗</span>
+            <span class="node-label">join/[token].ts</span>
+            <span class="node-sub">POST — validate + activate</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- LAYER 4: API UTILITIES                     -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="layer-lib" class="layer l-lib">
+      <div class="layer-label">🔧 Layer 4 — API Utilities (api/_lib/)</div>
+      <div class="flex flex-wrap">
+        <div class="node n-apilib" onclick="showDetail('libSession')" id="n-libSession">
+          <span class="node-icon">🍪</span>
+          <span class="node-label">session.ts</span>
+          <span class="node-sub">iron-session · httpOnly cookie</span>
+          <span class="badge" style="background:#1e293b;color:#94a3b8">getSession · requireSession</span>
+        </div>
+        <div class="node n-apilib" onclick="showDetail('libSheets')" id="n-libSheets">
+          <span class="node-icon">📊</span>
+          <span class="node-label">sheets.ts</span>
+          <span class="node-sub">googleapis · Sheets v4</span>
+          <span class="badge" style="background:#1e293b;color:#94a3b8">CRUD all 4 tabs</span>
+          <span class="badge" style="background:#dc2626;color:#fecaca">row-scan updates</span>
+        </div>
+        <div class="node n-apilib" onclick="showDetail('libDrive')" id="n-libDrive">
+          <span class="node-icon">📁</span>
+          <span class="node-label">drive.ts</span>
+          <span class="node-sub">googleapis · Drive v3</span>
+          <span class="badge" style="background:#1e293b;color:#94a3b8">upload + quota</span>
+        </div>
+        <div class="node n-apilib" onclick="showDetail('libOauth')" id="n-libOauth">
+          <span class="node-icon">🔑</span>
+          <span class="node-label">oauth.ts</span>
+          <span class="node-sub">OAuth2Client · identity only</span>
+          <span class="badge" style="background:#1e293b;color:#94a3b8">openid email profile</span>
+        </div>
+        <div class="node n-apilib" onclick="showDetail('libRoles')" id="n-libRoles">
+          <span class="node-icon">🛡️</span>
+          <span class="node-label">roles.ts</span>
+          <span class="node-sub">Role hierarchy guard</span>
+          <span class="badge" style="background:#1e293b;color:#94a3b8">view &lt; edit &lt; full &lt; manager</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ARROWS 3→4 -->
+    <div class="arrow-section">
+      <div class="arrow-line">
+        <div class="arrow-label">Service Account credentials + googleapis</div>
+        <svg width="300" height="20" class="arrow-svg"><line x1="0" y1="10" x2="280" y2="10" stroke="#f97316" stroke-width="1.5" stroke-dasharray="5,3"/><polygon points="280,5 300,10 280,15" fill="#f97316"/></svg>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- LAYER 5: GOOGLE SERVICES                   -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="layer-ext" class="layer l-ext">
+      <div class="layer-label">🌍 Layer 5 — External Google Services</div>
+      <div class="flex gap-4 flex-wrap">
+        <div class="node n-oauth" onclick="showDetail('googleOauth')" id="n-googleOauth">
+          <span class="node-icon">🔐</span>
+          <span class="node-label">Google OAuth 2.0</span>
+          <span class="node-sub">accounts.google.com</span>
+          <span class="badge" style="background:#4c0519;color:#fda4af">Identity only</span>
+          <span class="badge" style="background:#1f2937;color:#9ca3af">scopes: openid email profile</span>
+        </div>
+        <div class="node n-ext" onclick="showDetail('googleSheets')" id="n-googleSheets">
+          <span class="node-icon">📊</span>
+          <span class="node-label">Google Sheets API v4</span>
+          <span class="node-sub">sheets.googleapis.com</span>
+          <span class="badge" style="background:#431407;color:#fdba74">Source of truth</span>
+          <div style="margin-top:6px;font-size:9px;opacity:0.6">
+            Tab: Inventory (13 cols) · Staff (8) · Config (4) · Categories (4)
+          </div>
+        </div>
+        <div class="node n-ext" onclick="showDetail('googleDrive')" id="n-googleDrive">
+          <span class="node-icon">📁</span>
+          <span class="node-label">Google Drive API v3</span>
+          <span class="node-sub">drive.googleapis.com</span>
+          <span class="badge" style="background:#431407;color:#fdba74">Icon storage</span>
+          <div style="margin-top:6px;font-size:9px;opacity:0.6">
+            drive.file scope · Public reader permission
+          </div>
+        </div>
+
+        <!-- Env vars card -->
+        <div class="node" style="background:#0f172a;border:1px solid #334155;min-width:200px" onclick="showDetail('envVars')" id="n-envVars">
+          <span class="node-icon">🔒</span>
+          <span class="node-label">Environment Variables</span>
+          <div style="margin-top:6px;font-size:9px;opacity:0.5;line-height:1.8">
+            GOOGLE_CLIENT_ID<br>
+            GOOGLE_CLIENT_SECRET<br>
+            GOOGLE_REDIRECT_URI<br>
+            GOOGLE_SERVICE_ACCOUNT_EMAIL<br>
+            GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY<br>
+            GOOGLE_SHEETS_ID<br>
+            SESSION_SECRET
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LEGEND -->
+    <div style="margin-top:24px;padding:16px;background:#0d1117;border-radius:12px;border:1px solid #1f2937">
+      <div class="text-xs text-gray-500 uppercase tracking-wider mb-3">Legend</div>
+      <div class="flex flex-wrap gap-4 text-xs">
+        <div class="flex items-center gap-2"><div class="w-4 h-4 rounded" style="background:#312e81;border:1px solid #4f46e5"></div>Page component</div>
+        <div class="flex items-center gap-2"><div class="w-4 h-4 rounded" style="background:#1e3a5f;border:1px solid #3b82f6"></div>UI component</div>
+        <div class="flex items-center gap-2"><div class="w-4 h-4 rounded" style="background:#134e4a;border:1px solid #14b8a6"></div>Custom hook</div>
+        <div class="flex items-center gap-2"><div class="w-4 h-4 rounded" style="background:#2d1b69;border:1px solid #8b5cf6"></div>Client library</div>
+        <div class="flex items-center gap-2"><div class="w-4 h-4 rounded" style="background:#064e3b;border:1px solid #10b981"></div>IndexedDB store</div>
+        <div class="flex items-center gap-2"><div class="w-4 h-4 rounded" style="background:#0c4a6e;border:1px solid #0ea5e9"></div>API route</div>
+        <div class="flex items-center gap-2"><div class="w-4 h-4 rounded" style="background:#1e293b;border:1px solid #64748b"></div>API utility</div>
+        <div class="flex items-center gap-2"><div class="w-4 h-4 rounded" style="background:#431407;border:1px solid #f97316"></div>External service</div>
+        <div class="flex items-center gap-2"><div style="background:#f97316;height:2px;width:24px"></div>Data flow</div>
+        <div class="flex items-center gap-2"><div style="background:#ef4444;height:2px;width:12px"></div><span class="text-red-400">Critical issue</span></div>
+        <div class="flex items-center gap-2"><div style="background:#f59e0b;height:2px;width:12px"></div><span class="text-yellow-400">Warning</span></div>
+      </div>
+    </div>
+
+    </div><!-- end canvas -->
+  </div><!-- end canvas-inner -->
+</div><!-- end canvas-wrap -->
+
+<!-- DETAIL PANEL -->
+<div id="detail">
+  <div class="flex items-center justify-between mb-4">
+    <div id="detail-title" class="font-bold text-white text-sm"></div>
+    <button onclick="closeDetail()" class="text-gray-500 hover:text-white text-lg leading-none">✕</button>
+  </div>
+  <div id="detail-content"></div>
+</div>
+
+<script>
+// ─── NODE DATA ─────────────────────────────────────────────────────────────
+const nodeData = {
+  loginPage: {
+    title: '🔐 LoginPage',
+    file: 'src/pages/LoginPage.tsx',
+    type: 'Page Component',
+    description: 'OAuth login entry point. Handles ?error and ?invite URL params. Stores invite token in sessionStorage before OAuth redirect. Shows error messages for: not_authorized, invite_expired, invite_invalid, oauth_failed.',
+    imports: ['react-router-dom (useSearchParams)', 'sessionStorage API'],
+    exports: ['LoginPage component'],
+    flows: ['User → Sign in → /api/auth/login?invite=TOKEN → Google OAuth → /api/auth/callback'],
+    issues: []
+  },
+  itemsPage: {
+    title: '📦 ItemsPage',
+    file: 'src/pages/ItemsPage.tsx',
+    type: 'Page Component',
+    description: 'Main inventory list view. Combines search and category filter. Reads exclusively from IndexedDB via hooks. Triggers reload when write queue flushes on reconnect.',
+    imports: ['useInventory', 'useCategories', 'useWriteQueue', 'SearchBar', 'CategoryPills', 'ItemList'],
+    exports: ['ItemsPage component'],
+    flows: ['Mount → useInventory reads IndexedDB → display items', 'Reconnect → useWriteQueue flushes → reload'],
+    issues: []
+  },
+  itemDetailPage: {
+    title: '🔍 ItemDetailPage',
+    file: 'src/pages/ItemDetailPage.tsx',
+    type: 'Page Component',
+    description: 'Single item view. Reads from IndexedDB by item_id URL param. Shows icon (initials fallback), all prices, descriptions, stock qty. Edit/Delete buttons gated by role.',
+    imports: ['react-router-dom', 'getDB (IndexedDB)', 'apiFetch', 'PriceCard'],
+    exports: ['ItemDetailPage component'],
+    props: ['user: SessionUser'],
+    flows: ['Mount → IndexedDB.get(item_id) → render', 'Delete → DELETE /api/inventory/:id → IndexedDB.delete → navigate'],
+    issues: []
+  },
+  addEditPage: {
+    title: '✏️ AddEditItemPage',
+    file: 'src/pages/AddEditItemPage.tsx',
+    type: 'Page Component',
+    description: 'Create/edit item form. Handles offline mode: online writes go to API, offline writes go to IndexedDB + writeQueue. Includes image compression and Drive upload.',
+    imports: ['useCategories', 'useOffline', 'putInventoryItem', 'queueWrite', 'apiFetch', 'compressImage', 'ItemForm'],
+    exports: ['AddEditItemPage component'],
+    flows: ['Online create: compress → upload icon → POST /api/inventory → IndexedDB', 'Offline: skip upload → writeQueue → IndexedDB local only'],
+    issues: ['Offline creates cannot allocate item_id (backend assigns on flush)', 'Icon not uploaded when offline (skipped silently)']
+  },
+  settingsPage: {
+    title: '⚙️ SettingsPage',
+    file: 'src/pages/SettingsPage.tsx',
+    type: 'Page Component',
+    description: 'Manager-only settings screen. Guards with role check (redirects if not manager). Three sections: Store name, Categories, Staff.',
+    imports: ['useCategories', 'apiFetch', 'StaffList', 'InviteModal', 'CategoryManager'],
+    exports: ['SettingsPage component'],
+    flows: ['Load → GET /api/staff + GET /api/config', 'Save store name → PUT /api/config'],
+    issues: ['drive_folder_id not editable from UI (must be set in Google Sheet Config tab manually)']
+  },
+  appTsx: {
+    title: '⚛️ App.tsx',
+    file: 'src/App.tsx',
+    type: 'Root Component',
+    description: 'Application root. Sets up BrowserRouter, auth gate, full sync on login, invite claim from sessionStorage, and store name loading from IndexedDB.',
+    imports: ['react-router-dom', 'useAuth', 'useSync', 'getConfig', 'all pages'],
+    exports: ['default App'],
+    flows: ['Mount → /api/me → if user: sync() + load storeName', 'Claim invite from sessionStorage → POST /api/join/:token'],
+    issues: ['useSync error silently ignored — not shown to user']
+  },
+  appShell: {
+    title: '🏗️ AppShell',
+    file: 'src/components/layout/AppShell.tsx',
+    type: 'Layout Component',
+    description: 'Wraps all authenticated pages. Renders TopBar, OfflineBanner, main content, BottomNav in a full-viewport flex column.',
+    props: ['user: SessionUser', 'storeName: string', 'children: ReactNode'],
+    imports: ['TopBar', 'BottomNav', 'OfflineBanner'],
+    issues: []
+  },
+  topBar: {
+    title: '📌 TopBar',
+    file: 'src/components/layout/TopBar.tsx',
+    type: 'Layout Component',
+    description: 'Sticky header. Shows "ShopStock" branding, store name subtitle, AddButton (role-gated), AvatarMenu.',
+    props: ['user: SessionUser', 'storeName: string'],
+    issues: []
+  },
+  bottomNav: {
+    title: '🗂️ BottomNav',
+    file: 'src/components/layout/BottomNav.tsx',
+    type: 'Layout Component',
+    description: 'Sticky bottom navigation. "Items" always visible. "Settings" only shown to manager role.',
+    issues: []
+  },
+  offlineBanner: {
+    title: '📵 OfflineBanner',
+    file: 'src/components/layout/OfflineBanner.tsx',
+    type: 'Layout Component',
+    description: 'Amber banner shown when navigator.onLine is false. Uses useOffline hook.',
+    issues: []
+  },
+  itemList: {
+    title: '📋 ItemList',
+    file: 'src/components/items/ItemList.tsx',
+    type: 'UI Component',
+    description: 'Renders array of ItemCard components. Shows skeleton loading state (6 placeholder rows). Empty state with shopping bag icon.',
+    props: ['items: InventoryItem[]', 'loading: boolean'],
+    issues: ['No virtualization — large lists may be slow']
+  },
+  itemCard: {
+    title: '🃏 ItemCard',
+    file: 'src/components/items/ItemCard.tsx',
+    type: 'UI Component',
+    description: 'Single item row. Shows icon or initials fallback, item name, item_id + category, retail price. Navigates to /items/:id on tap.',
+    issues: []
+  },
+  categoryPills: {
+    title: '💊 CategoryPills',
+    file: 'src/components/items/CategoryPills.tsx',
+    type: 'UI Component',
+    description: 'Horizontal scroll row of filter pills. "All" always first. Active pill highlighted teal. No-scrollbar CSS class applied.',
+    issues: []
+  },
+  searchBar: {
+    title: '🔎 SearchBar',
+    file: 'src/components/items/SearchBar.tsx',
+    type: 'UI Component',
+    description: 'Search input with magnifier icon and clear (X) button. Filters items by name, item_id, or category.',
+    issues: ['No debounce implemented — filters on every keystroke']
+  },
+  priceCard: {
+    title: '💲 PriceCard',
+    file: 'src/components/items/PriceCard.tsx',
+    type: 'UI Component',
+    description: 'Colored price display card. Variants: base (blue), retail (teal), wholesale (purple). Returns null if price is null.',
+    issues: []
+  },
+  addButton: {
+    title: '➕ AddButton',
+    file: 'src/components/items/AddButton.tsx',
+    type: 'UI Component',
+    description: 'Circular + button in TopBar. Hidden for role="view". Navigates to /items/new.',
+    issues: []
+  },
+  itemForm: {
+    title: '📝 ItemForm',
+    file: 'src/components/forms/ItemForm.tsx',
+    type: 'Form Component',
+    description: 'Full item form with all fields. Validates item_name and both prices required. Category dropdown populated from prop. Calls onSubmit with form data + iconBlob.',
+    props: ['initial?: Partial<InventoryItem>', 'categories: Category[]', 'onSubmit: function', 'submitLabel?: string'],
+    issues: []
+  },
+  iconField: {
+    title: '📷 IconField',
+    file: 'src/components/forms/IconField.tsx',
+    type: 'Form Component',
+    description: 'Icon picker. File input with capture="environment" for mobile camera. Calls compressImage() on selection. Shows preview with remove button.',
+    imports: ['compressImage from @/lib/imageCompress'],
+    issues: []
+  },
+  staffList: {
+    title: '👥 StaffList',
+    file: 'src/components/settings/StaffList.tsx',
+    type: 'Settings Component',
+    description: 'Shows all staff with avatar initials, name, email, role badge (color-coded), status badge. Revoke button for non-manager non-revoked staff.',
+    flows: ['Revoke → POST /api/staff {action: revoke, gmail} → onRefresh()'],
+    issues: []
+  },
+  inviteModal: {
+    title: '📨 InviteModal',
+    file: 'src/components/settings/InviteModal.tsx',
+    type: 'Settings Component',
+    description: 'Radix Dialog (bottom sheet). Role picker (view/edit/full). Generates invite URL with 48h expiry token. Copy to clipboard button.',
+    flows: ['Submit → POST /api/staff {action: invite, role} → show URL → copy'],
+    issues: []
+  },
+  categoryManager: {
+    title: '🗃️ CategoryManager',
+    file: 'src/components/settings/CategoryManager.tsx',
+    type: 'Settings Component',
+    description: 'Category list with add/delete. GripVertical icon shown (drag-to-reorder not implemented). Misc category cannot be deleted. Writes to both API and IndexedDB.',
+    flows: ['Add → POST /api/categories → putCategory(IndexedDB) → reload', 'Delete → DELETE /api/categories/:id → deleteCategory(IndexedDB) → reload'],
+    issues: ['Drag-to-reorder UI is visual only — not functional']
+  },
+  avatarMenu: {
+    title: '👤 AvatarMenu',
+    file: 'src/components/auth/AvatarMenu.tsx',
+    type: 'Auth Component',
+    description: 'Radix DropdownMenu. Shows initials (2 chars from display_name). Menu shows name, email, role badge, Sign out button.',
+    flows: ['Sign out → POST /api/auth/logout → window.location = /login'],
+    issues: []
+  },
+  useAuth: {
+    title: '🔑 useAuth',
+    file: 'src/hooks/useAuth.ts',
+    type: 'Custom Hook',
+    description: 'Fetches /api/me once on mount. Returns { user, loading, error }. 401 response = no user. Used by App.tsx to gate all authenticated routes.',
+    issues: ['No retry on transient errors', 'No refresh — stale role until page reload']
+  },
+  useInventory: {
+    title: '📦 useInventory',
+    file: 'src/hooks/useInventory.ts',
+    type: 'Custom Hook',
+    description: 'Reads all inventory from IndexedDB on mount. Exposes reload() for manual refresh. No sorting applied.',
+    issues: []
+  },
+  useCategories: {
+    title: '🏷️ useCategories',
+    file: 'src/hooks/useCategories.ts',
+    type: 'Custom Hook',
+    description: 'Reads categories from IndexedDB. Sorts by sort_order with Misc always last. Exposes reload().',
+    issues: []
+  },
+  useOffline: {
+    title: '📡 useOffline',
+    file: 'src/hooks/useOffline.ts',
+    type: 'Custom Hook',
+    description: 'Returns boolean indicating offline state. Listens to window online/offline events. Initial state from navigator.onLine.',
+    issues: []
+  },
+  useSync: {
+    title: '🔄 useSync',
+    file: 'src/hooks/useSync.ts',
+    type: 'Custom Hook',
+    description: 'Fetches /api/sync/full and seeds all 3 IndexedDB stores (clearAndSeed). Called on login if online.',
+    issues: ['Error state set but never displayed in UI']
+  },
+  useWriteQueue: {
+    title: '⏳ useWriteQueue',
+    file: 'src/hooks/useWriteQueue.ts',
+    type: 'Custom Hook',
+    description: 'Detects transition from offline → online using useRef. Calls flushWriteQueue() then fires onFlushed callback. Used in ItemsPage to reload items after sync.',
+    issues: []
+  },
+  typesTs: {
+    title: '📐 types.ts',
+    file: 'src/lib/types.ts',
+    type: 'Shared Library',
+    description: 'Single source of type truth. Used by BOTH frontend and api/. Contains: Role, StaffStatus, InventoryItem (13 fields), Category, Config, StaffMember, SessionUser, SyncSnapshot, WriteQueueEntry.',
+    issues: []
+  },
+  dbTs: {
+    title: '💾 db.ts',
+    file: 'src/lib/db.ts',
+    type: 'Client Library',
+    description: 'IndexedDB interface via idb v8. Singleton getDB() pattern. openDB with upgrade handler. Typed schema with DBSchema. All CRUD helpers for 4 stores.',
+    issues: []
+  },
+  apiTs: {
+    title: '🌐 api.ts',
+    file: 'src/lib/api.ts',
+    type: 'Client Library',
+    description: 'Thin fetch wrapper. Sets Content-Type: application/json and credentials: include. Throws Error on non-OK responses. Returns parsed JSON or null.',
+    issues: []
+  },
+  writeQueueTs: {
+    title: '📝 writeQueue.ts',
+    file: 'src/lib/writeQueue.ts',
+    type: 'Client Library',
+    description: 'Offline write queue. queueWrite() adds entry to IndexedDB with ISO timestamp. flushWriteQueue() processes entries in enqueuedAt order, stops on first error.',
+    issues: ['Stops on first error — later writes stranded indefinitely', 'No max retry count']
+  },
+  imageCompressTs: {
+    title: '🖼️ imageCompress.ts',
+    file: 'src/lib/imageCompress.ts',
+    type: 'Client Library',
+    description: 'Canvas-based image compression. Scales to max 200px on longest edge. Outputs JPEG at quality 0.7. Returns Blob.',
+    issues: ['MAX_DIM and QUALITY are hardcoded constants']
+  },
+  idbInventory: {
+    title: '📦 IndexedDB: inventory',
+    type: 'IDB Store',
+    description: 'Stores InventoryItem objects. keyPath: item_id. Indexes: by-category (string), by-name (string). Populated from /api/sync/full on login. Updated on item add/edit/delete.',
+    issues: ['by-name index cannot do full-text search — JS filter used for search instead']
+  },
+  idbCategories: {
+    title: '🏷️ IndexedDB: categories',
+    type: 'IDB Store',
+    description: 'Stores Category objects. keyPath: category_id. Index: by-sort-order (number). Populated from /api/sync/full. Updated after category add/delete.',
+    issues: []
+  },
+  idbConfig: {
+    title: '⚙️ IndexedDB: config',
+    type: 'IDB Store',
+    description: 'Stores single Config row. keyPath: "key", value = "singleton". Contains store_name, drive_folder_id, last_item_seq, drive_quota_warning_sent.',
+    issues: []
+  },
+  idbWriteQueue: {
+    title: '⏳ IndexedDB: writeQueue',
+    type: 'IDB Store',
+    description: 'Queue for offline write operations. keyPath: id (autoIncrement). Index: by-enqueued (enqueuedAt ISO string). Each entry has: operation, resource, resourceId, payload.',
+    issues: ['No max queue size', 'No TTL on queued writes']
+  },
+  sw: {
+    title: '⚡ Service Worker',
+    type: 'PWA',
+    description: 'Workbox-generated via vite-plugin-pwa. Precaches app shell. NetworkOnly for /api routes. CacheFirst for Drive images (30 days, 500 entries) and profile images (7 days, 20 entries). Auto-update mode.',
+    issues: []
+  },
+  routeAuth: {
+    title: '🔐 auth/[action].ts',
+    file: 'api/auth/[action].ts',
+    type: 'API Route',
+    description: 'Consolidated auth handler. action=login: generates OAuth URL with invite token as state. action=callback: exchanges code, fetches userinfo, checks Staff tab, bootstraps manager, activates invites, sets session. action=logout: destroys session.',
+    methods: ['GET /api/auth/login', 'GET /api/auth/callback', 'POST /api/auth/logout'],
+    issues: ['Dynamic import of googleapis inside handler (performance)']
+  },
+  routeMe: {
+    title: '👤 me.ts',
+    file: 'api/me.ts',
+    type: 'API Route',
+    description: 'Returns { gmail, display_name, role } from session. 401 if no session. Used by useAuth hook on every page load.',
+    methods: ['GET /api/me'],
+    issues: []
+  },
+  routeSync: {
+    title: '🔄 sync/full.ts',
+    file: 'api/sync/full.ts',
+    type: 'API Route',
+    description: 'Returns full SyncSnapshot: { inventory[], categories[], config }. Fetches all three from Sheets in parallel (Promise.all). Used by useSync hook on login.',
+    methods: ['GET /api/sync/full'],
+    issues: ['3 concurrent Sheets API calls on every login']
+  },
+  routeInvIndex: {
+    title: '📋 inventory/index.ts',
+    file: 'api/inventory/index.ts',
+    type: 'API Route',
+    description: 'GET: returns all inventory items. POST: creates new item, allocates item_id via allocateNextItemId(), sets timestamps. Requires edit role minimum.',
+    methods: ['GET /api/inventory', 'POST /api/inventory'],
+    issues: ['No pagination on GET']
+  },
+  routeInvId: {
+    title: '📄 inventory/[id].ts',
+    file: 'api/inventory/[id].ts',
+    type: 'API Route',
+    description: 'GET single item. PUT updates (requires edit). DELETE removes (requires full or manager). All write operations do row-scan to find index.',
+    methods: ['GET /api/inventory/:id', 'PUT /api/inventory/:id', 'DELETE /api/inventory/:id'],
+    issues: ['Row-scan O(n) on every PUT/DELETE — reads all column A first']
+  },
+  routeCatIndex: {
+    title: '🏷️ categories/index.ts',
+    file: 'api/categories/index.ts',
+    type: 'API Route',
+    description: 'GET: all categories. POST: add new (manager only). Auto-generates category_id (CAT###) and sort_order (max+1).',
+    methods: ['GET /api/categories', 'POST /api/categories'],
+    issues: []
+  },
+  routeCatId: {
+    title: '🏷️ categories/[id].ts',
+    file: 'api/categories/[id].ts',
+    type: 'API Route',
+    description: 'PUT: update category (manager only). DELETE: remove category (manager only). Explicitly blocks deletion of "Misc" category.',
+    methods: ['PUT /api/categories/:id', 'DELETE /api/categories/:id'],
+    issues: []
+  },
+  routeStaff: {
+    title: '👥 staff/index.ts',
+    file: 'api/staff/index.ts',
+    type: 'API Route',
+    description: 'GET: list all staff (manager only). POST with action=invite: generates UUID token, 48h expiry, creates placeholder staff entry. POST with action=revoke: sets status=revoked, blocks revoking manager.',
+    methods: ['GET /api/staff', 'POST /api/staff (action: invite|revoke)'],
+    issues: ['Invite creates placeholder row with gmail=__invited__${token} — pollutes Staff tab']
+  },
+  routeConfig: {
+    title: '⚙️ config/index.ts',
+    file: 'api/config/index.ts',
+    type: 'API Route',
+    description: 'GET: returns Config row. PUT: updates partial config (manager only). Currently only store_name is settable via UI. drive_folder_id must be set manually in Sheet.',
+    methods: ['GET /api/config', 'PUT /api/config'],
+    issues: ['No UI to set drive_folder_id — must edit Google Sheet Config tab directly']
+  },
+  routeUpload: {
+    title: '📤 upload/icon.ts',
+    file: 'api/upload/icon.ts',
+    type: 'API Route',
+    description: 'POST multipart/form-data. bodyParser: false. Custom multipart parser extracts icon field. Checks Drive quota (skips for service accounts). Uploads JPEG to Drive folder. Makes file public. Returns { url }.',
+    methods: ['POST /api/upload/icon'],
+    issues: ['Custom multipart parser — fragile, should use busboy/formidable', 'No file size validation', 'No MIME type validation beyond icon field name']
+  },
+  routeJoin: {
+    title: '🔗 join/[token].ts',
+    file: 'api/join/[token].ts',
+    type: 'API Route',
+    description: 'POST: validates invite token from URL. Requires authenticated session. Updates staff row: gmail=session.gmail, status=active, joined_at=now. Updates session role.',
+    methods: ['POST /api/join/:token'],
+    issues: []
+  },
+  libSession: {
+    title: '🍪 session.ts',
+    file: 'api/_lib/session.ts',
+    type: 'API Utility',
+    description: 'iron-session v8 configuration. Cookie: shopstock-session, HTTP-only, SameSite=Lax, 7 days. getSession() returns typed session. requireSession() enforces auth and returns SessionData.',
+    issues: ['No session refresh mechanism', 'Password falls back to hardcoded string if SESSION_SECRET not set']
+  },
+  libSheets: {
+    title: '📊 sheets.ts',
+    file: 'api/_lib/sheets.ts',
+    type: 'API Utility',
+    description: 'All Google Sheets operations. Service account auth. Helpers for all 4 tabs. Row-to-object and object-to-row converters. initializeSheet() bootstraps tab structure on first manager login.',
+    issues: ['Every update/delete reads entire column A first (O(n) row scan)', 'No transaction isolation — concurrent writes can race', 'allocateNextItemId is not atomic']
+  },
+  libDrive: {
+    title: '📁 drive.ts',
+    file: 'api/_lib/drive.ts',
+    type: 'API Utility',
+    description: 'Google Drive operations. checkDriveQuota(): wraps in try/catch — service accounts return error so defaults to unblocked. uploadIconToDrive(): creates file in folder, sets public reader permission, returns direct URL.',
+    issues: ['Drive quota check unreliable for service accounts (always returns not blocked)', 'No cleanup when items/icons deleted — Drive fills up over time']
+  },
+  libOauth: {
+    title: '🔑 oauth.ts',
+    file: 'api/_lib/oauth.ts',
+    type: 'API Utility',
+    description: 'Creates OAuth2Client with GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI. OAUTH_SCOPES = [openid, email, profile]. Used only for identity — not for Sheets/Drive.',
+    issues: []
+  },
+  libRoles: {
+    title: '🛡️ roles.ts',
+    file: 'api/_lib/roles.ts',
+    type: 'API Utility',
+    description: 'Role hierarchy: view(0) < edit(1) < full(2) < manager(3). hasRole(userRole, minRole) checks index. requireRole() sends 403 JSON if insufficient and returns false.',
+    issues: []
+  },
+  googleOauth: {
+    title: '🔐 Google OAuth 2.0',
+    type: 'External Service',
+    description: 'Identity provider. Users authenticate with their Gmail account. Scopes: openid, email, profile. Access token + refresh token returned in callback. Tokens NOT stored server-side (service account handles Sheets/Drive).',
+    endpoint: 'accounts.google.com',
+    issues: []
+  },
+  googleSheets: {
+    title: '📊 Google Sheets API v4',
+    type: 'External Service',
+    description: 'Primary database. Manager\'s own Google Sheet. 4 tabs: Inventory (13 cols), Staff (8 cols), Config (4 cols, single row), Categories (4 cols). Access via service account credentials.',
+    endpoint: 'sheets.googleapis.com',
+    issues: ['Not a real database — no transactions, no indexes, row-scan updates', 'Concurrent writes can cause race conditions']
+  },
+  googleDrive: {
+    title: '📁 Google Drive API v3',
+    type: 'External Service',
+    description: 'Icon image storage. Files uploaded to manager-specified folder (drive_folder_id). Service account uses drive.file scope. Files made publicly readable. URLs never expire.',
+    endpoint: 'drive.googleapis.com',
+    issues: ['Deleted item icons remain in Drive forever', 'drive.file scope limits to files created by the service account only']
+  },
+  envVars: {
+    title: '🔒 Environment Variables',
+    type: 'Configuration',
+    description: 'All 7 required env vars. Stored in .env.local for development, Vercel dashboard for production.',
+    items: [
+      'GOOGLE_CLIENT_ID — OAuth2 client ID (.apps.googleusercontent.com)',
+      'GOOGLE_CLIENT_SECRET — OAuth2 client secret (GOCSPX-...)',
+      'GOOGLE_REDIRECT_URI — Must match Google Console exactly',
+      'GOOGLE_SERVICE_ACCOUNT_EMAIL — service@project.iam.gserviceaccount.com',
+      'GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY — With literal \\n sequences',
+      'GOOGLE_SHEETS_ID — From Sheet URL /d/{ID}/edit',
+      'SESSION_SECRET — Min 32 chars hex string'
+    ],
+    issues: ['SESSION_SECRET fallback hardcoded in session.ts if not set']
+  }
+};
+
+// ─── DETAIL PANEL ─────────────────────────────────────────────────────────
+function showDetail(id) {
+  const data = nodeData[id];
+  if (!data) return;
+  document.querySelectorAll('.node').forEach(n => n.classList.remove('selected'));
+  const el = document.getElementById('n-' + id);
+  if (el) el.classList.add('selected');
+
+  const panel = document.getElementById('detail');
+  document.getElementById('detail-title').textContent = data.title;
+
+  let html = '';
+  html += `<div class="text-xs px-2 py-1 rounded mb-3 inline-block" style="background:#1f2937;color:#94a3b8">${data.type}</div>`;
+  if (data.file) html += `<div class="text-xs text-teal-400 mb-3 font-mono bg-gray-900 px-2 py-1 rounded">${data.file}</div>`;
+  html += `<p class="text-sm text-gray-300 leading-relaxed mb-4">${data.description}</p>`;
+
+  if (data.methods && data.methods.length) {
+    html += `<div class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Endpoints</div>`;
+    data.methods.forEach(m => {
+      html += `<div class="text-xs font-mono bg-gray-900 px-2 py-1 rounded mb-1 text-sky-300">${m}</div>`;
+    });
+    html += '<div class="mb-3"></div>';
+  }
+  if (data.imports && data.imports.length) {
+    html += `<div class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Imports</div>`;
+    data.imports.forEach(i => {
+      html += `<span class="detail-tag" style="background:#1f2937;color:#94a3b8">${i}</span>`;
+    });
+    html += '<div class="mb-3"></div>';
+  }
+  if (data.flows && data.flows.length) {
+    html += `<div class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 mt-2">Data Flows</div>`;
+    data.flows.forEach(f => {
+      html += `<div class="text-xs text-gray-400 bg-gray-900 rounded px-2 py-1 mb-1">→ ${f}</div>`;
+    });
+    html += '<div class="mb-3"></div>';
+  }
+  if (data.items && data.items.length) {
+    html += `<div class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Variables</div>`;
+    data.items.forEach(i => {
+      html += `<div class="text-xs text-gray-300 py-1 border-b border-gray-800">${i}</div>`;
+    });
+    html += '<div class="mb-3"></div>';
+  }
+  if (data.issues && data.issues.length) {
+    html += `<div class="text-xs font-bold text-red-400 uppercase tracking-wide mb-2 mt-2">⚠ Issues</div>`;
+    data.issues.forEach(i => {
+      html += `<div class="text-xs text-red-300 bg-red-950 border border-red-900 rounded px-2 py-1 mb-1">${i}</div>`;
+    });
+  }
+  if (!data.issues || !data.issues.length) {
+    html += `<div class="text-xs text-green-400 mt-2">✓ No known issues</div>`;
+  }
+
+  document.getElementById('detail-content').innerHTML = html;
+  panel.classList.add('open');
+}
+
+function closeDetail() {
+  document.getElementById('detail').classList.remove('open');
+  document.querySelectorAll('.node').forEach(n => n.classList.remove('selected'));
+}
+
+// ─── ZOOM / PAN ───────────────────────────────────────────────────────────
+let scale = 1;
+const inner = document.getElementById('canvas-inner');
+const wrap = document.getElementById('canvas-wrap');
+
+document.getElementById('zoom-in').addEventListener('click', () => { scale = Math.min(scale + 0.1, 2); applyZoom(); });
+document.getElementById('zoom-out').addEventListener('click', () => { scale = Math.max(scale - 0.1, 0.3); applyZoom(); });
+document.getElementById('zoom-reset').addEventListener('click', () => { scale = 1; applyZoom(); });
+
+function applyZoom() { inner.style.transform = `scale(${scale})`; }
+
+// Mouse drag to pan
+let dragging = false, startX, startY, scrollLeft, scrollTop;
+wrap.addEventListener('mousedown', e => {
+  if (e.target.closest('.node') || e.target.closest('#detail') || e.target.closest('#sidebar')) return;
+  dragging = true; startX = e.pageX; startY = e.pageY;
+  scrollLeft = wrap.scrollLeft; scrollTop = wrap.scrollTop;
+  wrap.style.cursor = 'grabbing';
+});
+wrap.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  wrap.scrollLeft = scrollLeft - (e.pageX - startX);
+  wrap.scrollTop = scrollTop - (e.pageY - startY);
+});
+wrap.addEventListener('mouseup', () => { dragging = false; wrap.style.cursor = 'grab'; });
+wrap.addEventListener('mouseleave', () => { dragging = false; wrap.style.cursor = 'grab'; });
+
+// Scroll to layer
+function scrollToLayer(id) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+</script>
+</body>
+</html>
