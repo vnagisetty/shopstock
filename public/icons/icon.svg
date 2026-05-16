@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Teal background -->
+  <rect width="512" height="512" rx="80" fill="#00897B"/>
+  <!-- Shopping tag outline -->
+  <!-- Tag body: rounded rect, rotated 45deg around center -->
+  <g transform="translate(256,256) rotate(45)">
+    <rect x="-130" y="-130" width="260" height="260" rx="30" fill="none" stroke="white" stroke-width="22"/>
+    <!-- Small circle hole at top-left of tag -->
+    <circle cx="-75" cy="-75" r="22" fill="none" stroke="white" stroke-width="20"/>
+  </g>
+  <!-- Tag notch: triangle pointing right -->
+  <polygon points="390,256 440,210 440,302" fill="white" opacity="0.9"/>
+</svg>
