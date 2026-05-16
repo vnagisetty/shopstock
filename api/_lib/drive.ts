@@ -12,12 +12,17 @@ function getAuth() {
 }
 
 export async function checkDriveQuota(): Promise<{ usedFraction: number; blocked: boolean }> {
-  const drive = google.drive({ version: 'v3', auth: getAuth() })
-  const res = await drive.about.get({ fields: 'storageQuota' })
-  const quota = res.data.storageQuota
-  if (!quota?.limit || !quota.usageInDrive) return { usedFraction: 0, blocked: false }
-  const usedFraction = parseInt(quota.usageInDrive) / parseInt(quota.limit)
-  return { usedFraction, blocked: usedFraction > 0.9 }
+  try {
+    const drive = google.drive({ version: 'v3', auth: getAuth() })
+    const res = await drive.about.get({ fields: 'storageQuota' })
+    const quota = res.data.storageQuota
+    if (!quota?.limit || !quota.usageInDrive) return { usedFraction: 0, blocked: false }
+    const usedFraction = parseInt(quota.usageInDrive) / parseInt(quota.limit)
+    return { usedFraction, blocked: usedFraction > 0.9 }
+  } catch {
+    // Service accounts don't have personal storage quota — skip the check
+    return { usedFraction: 0, blocked: false }
+  }
 }
 
 export async function uploadIconToDrive(
