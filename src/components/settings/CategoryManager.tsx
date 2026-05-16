@@ -2,10 +2,15 @@ import { useState } from 'react'
 import { Trash2, GripVertical, Plus } from 'lucide-react'
 import type { Category } from '@/lib/types'
 import { apiFetch } from '@/lib/api'
+import { putCategory, deleteCategory as deleteCategoryFromDB } from '@/lib/db'
 
 interface Props {
   categories: Category[]
   onRefresh: () => void
+}
+
+interface CategoryResponse {
+  category: Category
 }
 
 export function CategoryManager({ categories, onRefresh }: Props) {
@@ -17,7 +22,11 @@ export function CategoryManager({ categories, onRefresh }: Props) {
     if (!name) return
     setAdding(true)
     try {
-      await apiFetch('/api/categories', { method: 'POST', body: JSON.stringify({ category_name: name }) })
+      const res = await apiFetch('/api/categories', {
+        method: 'POST',
+        body: JSON.stringify({ category_name: name }),
+      }) as CategoryResponse
+      await putCategory(res.category)
       setNewName('')
       onRefresh()
     } catch (e: unknown) {
@@ -32,6 +41,7 @@ export function CategoryManager({ categories, onRefresh }: Props) {
     if (!confirm(`Delete category "${cat.category_name}"?`)) return
     try {
       await apiFetch(`/api/categories/${cat.category_id}`, { method: 'DELETE' })
+      await deleteCategoryFromDB(cat.category_id)
       onRefresh()
     } catch (e: unknown) {
       alert(String(e))
