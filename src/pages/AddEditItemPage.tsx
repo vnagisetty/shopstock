@@ -47,9 +47,13 @@ export function AddEditItemPage({ user }: Props) {
     })
     if (!res.ok) {
       const text = await res.text().catch(() => '')
-      throw new Error(text.includes('Drive not connected')
-        ? 'Photo storage not connected. Go to Settings → Connect Google Drive.'
-        : `Icon upload failed: ${text.slice(0, 200)}`)
+      if (text.includes('Drive not connected')) {
+        const returnTo = encodeURIComponent(window.location.pathname)
+        const hint = encodeURIComponent(user.gmail)
+        window.location.href = `/api/auth/login?for=drive-reconnect&hint=${hint}&returnTo=${returnTo}`
+        return ''
+      }
+      throw new Error(`Icon upload failed: ${text.slice(0, 200)}`)
     }
     const data = await res.json() as { url: string }
     return data.url

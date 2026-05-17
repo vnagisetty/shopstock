@@ -19,6 +19,7 @@ interface OAuthState {
   invite?: string
   store?: string
   for?: 'drive' | 'drive-reconnect'
+  returnTo?: string
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -27,16 +28,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ── GET /api/auth/login ───────────────────────────────────────────────────
   if (action === 'login') {
     const oauth2Client = getOAuthClient()
-    const invite        = typeof req.query.invite === 'string' ? req.query.invite : ''
-    const store         = typeof req.query.store  === 'string' ? req.query.store  : ''
-    const forParam      = typeof req.query.for    === 'string' ? req.query.for    : ''
-    const hint          = typeof req.query.hint   === 'string' ? req.query.hint   : ''
+    const invite        = typeof req.query.invite    === 'string' ? req.query.invite    : ''
+    const store         = typeof req.query.store     === 'string' ? req.query.store     : ''
+    const forParam      = typeof req.query.for       === 'string' ? req.query.for       : ''
+    const hint          = typeof req.query.hint      === 'string' ? req.query.hint      : ''
+    const returnTo      = typeof req.query.returnTo  === 'string' ? req.query.returnTo  : ''
     const isDriveFlow   = forParam === 'drive' || forParam === 'drive-reconnect'
     const state: OAuthState = {}
-    if (invite)                        state.invite = invite
-    if (store)                         state.store  = store
-    if (forParam === 'drive')          state.for    = 'drive'
-    if (forParam === 'drive-reconnect') state.for   = 'drive-reconnect'
+    if (invite)                         state.invite   = invite
+    if (store)                          state.store    = store
+    if (forParam === 'drive')           state.for      = 'drive'
+    if (forParam === 'drive-reconnect') state.for      = 'drive-reconnect'
+    if (returnTo)                       state.returnTo = returnTo
     const url = oauth2Client.generateAuthUrl({
       access_type: 'offline',
       scope: isDriveFlow ? ['https://www.googleapis.com/auth/drive.file'] : OAUTH_SCOPES,
@@ -58,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const inviteToken = stateData.invite ?? ''
     const storeId     = stateData.store  ?? ''
 
-    // Drive reconnect from Settings: save refresh token directly to Config
+    // Drive reconnect: save refresh token to Config, then return to where the user was
     if (stateData.for === 'drive-reconnect') {
       try {
         const oauth2Client = getOAuthClient()
@@ -68,10 +71,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (tokens.refresh_token) {
           await updateConfig(session.sheet_id, { manager_refresh_token: tokens.refresh_token })
         }
-        return res.redirect(302, '/settings')
+        return res.redirect(302, stateData.returnTo ?? '/items')
       } catch (e: unknown) {
         console.error('drive-reconnect error:', e)
-        return res.redirect(302, '/settings?error=drive_connect_failed')
+        return res.redirect(302, stateData.returnTo ?? '/items')
       }
     }
 
