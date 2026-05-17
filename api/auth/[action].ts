@@ -64,6 +64,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const session = await getSession(req, res)
         if (!session.gmail) return res.redirect(302, '/login?error=session_expired')
         session.oauth_access_token = tokens.access_token ?? ''
+        session.oauth_refresh_token = tokens.refresh_token ?? ''
         await session.save()
         return res.redirect(302, '/setup')
       } catch {
@@ -178,6 +179,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       session.display_name = display_name
       if (hasDriveFile) {
         session.oauth_access_token = tokens.access_token ?? ''
+        session.oauth_refresh_token = tokens.refresh_token ?? ''
         await session.save()
         return res.redirect(302, '/setup')
       }
@@ -207,9 +209,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const pending = await requirePendingSession(req, res)
     if (!pending) return
 
-    // Read the full session directly to get the stashed OAuth token
+    // Read the full session directly to get the stashed OAuth tokens
     const setupSession = await getSession(req, res)
     const accessToken = setupSession.oauth_access_token ?? ''
+    const refreshToken = setupSession.oauth_refresh_token ?? ''
     if (!accessToken) return res.status(400).json({ error: 'OAuth token missing — please sign in again' })
 
     const { store_name } = req.body as { store_name?: string }
@@ -230,7 +233,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let folderId = ''
       try {
         folderId = await createDriveFolder(`${name} — Item Icons`, accessToken)
-        await updateConfig(newSheetId, { drive_folder_id: folderId })
+        await updateConfig(newSheetId, { drive_folder_id: folderId, manager_refresh_token: refreshToken })
       } catch { /* non-fatal — manager can set folder manually */ }
 
       // Add the user as manager in the new sheet's Staff tab
@@ -251,11 +254,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // Promote partial session to full session (clear the temporary OAuth token)
       const session = await getSession(req, res)
-      session.gmail              = pending.gmail
-      session.display_name       = pending.display_name
-      session.role               = 'manager'
-      session.sheet_id           = newSheetId
-      session.oauth_access_token = undefined
+      session.gmail               = pending.gmail
+      session.display_name        = pending.display_name
+      session.role                = 'manager'
+      session.sheet_id            = newSheetId
+      session.oauth_access_token  = undefined
+      session.oauth_refresh_token = undefined
       await session.save()
 
       return res.status(200).json({ ok: true, sheet_id: newSheetId })

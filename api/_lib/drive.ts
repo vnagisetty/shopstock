@@ -1,5 +1,6 @@
 import { google } from 'googleapis'
 import type { Readable } from 'stream'
+import { getOAuthClient } from './oauth.js'
 
 function getAuth() {
   return new google.auth.GoogleAuth({
@@ -9,6 +10,12 @@ function getAuth() {
     },
     scopes: ['https://www.googleapis.com/auth/drive'],
   })
+}
+
+function getManagerAuth(refreshToken: string) {
+  const oauth2Client = getOAuthClient()
+  oauth2Client.setCredentials({ refresh_token: refreshToken })
+  return oauth2Client
 }
 
 export async function checkDriveQuota(): Promise<{ usedFraction: number; blocked: boolean }> {
@@ -62,6 +69,31 @@ export async function uploadIconToDrive(
     requestBody: { name: filename, parents: [folderId] },
     media: { mimeType, body: stream },
     fields: 'id,webContentLink',
+  })
+
+  const fileId = file.data.id!
+  await drive.permissions.create({
+    fileId,
+    requestBody: { role: 'reader', type: 'anyone' },
+  })
+
+  return `https://drive.google.com/uc?export=view&id=${fileId}`
+}
+
+export async function uploadIconAsManager(
+  folderId: string,
+  filename: string,
+  stream: Readable,
+  mimeType: string,
+  refreshToken: string,
+): Promise<string> {
+  const auth = getManagerAuth(refreshToken)
+  const drive = google.drive({ version: 'v3', auth })
+
+  const file = await drive.files.create({
+    requestBody: { name: filename, parents: [folderId] },
+    media: { mimeType, body: stream },
+    fields: 'id',
   })
 
   const fileId = file.data.id!

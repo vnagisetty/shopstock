@@ -24,7 +24,7 @@ function getSheetsClient() {
 //            K=created_at L=updated_at M=updated_by
 // Staff:     A=gmail B=display_name C=role D=status E=invite_token
 //            F=invite_expires_at G=invited_at H=joined_at
-// Config:    A=store_name B=drive_folder_id C=last_item_seq D=drive_quota_warning_sent
+// Config:    A=store_name B=drive_folder_id C=last_item_seq D=drive_quota_warning_sent E=manager_refresh_token
 // Categories:A=category_id B=category_name C=sort_order D=created_at
 
 function rowToItem(r: string[]): InventoryItem {
@@ -241,13 +241,14 @@ export async function updateStaff(sheetId: string, s: StaffMember): Promise<void
 
 export async function getConfig(sheetId: string): Promise<Config> {
   const sheets = getSheetsClient()
-  const res = await sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range: 'Config!A2:D2' })
+  const res = await sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range: 'Config!A2:E2' })
   const row = ((res.data.values ?? []) as string[][])[0] ?? []
   return {
     store_name: row[0] ?? '',
     drive_folder_id: row[1] ?? '',
     last_item_seq: parseInt(row[2] ?? '0') || 0,
     drive_quota_warning_sent: row[3] === 'true',
+    manager_refresh_token: row[4] ?? '',
   }
 }
 
@@ -257,9 +258,9 @@ export async function updateConfig(sheetId: string, config: Partial<Config>): Pr
   const sheets = getSheetsClient()
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range: 'Config!A2:D2',
+    range: 'Config!A2:E2',
     valueInputOption: 'RAW',
-    requestBody: { values: [[merged.store_name, merged.drive_folder_id, String(merged.last_item_seq), String(merged.drive_quota_warning_sent)]] },
+    requestBody: { values: [[merged.store_name, merged.drive_folder_id, String(merged.last_item_seq), String(merged.drive_quota_warning_sent), merged.manager_refresh_token]] },
   })
 }
 
@@ -289,7 +290,7 @@ export async function initializeSheet(sheetId: string): Promise<void> {
   const tabs = [
     { title: 'Inventory', header: ['item_id','item_name','category','description_1','description_2','base_price','retail_price','wholesale_price','stock_qty','icon_url','created_at','updated_at','updated_by'] },
     { title: 'Staff',     header: ['gmail','display_name','role','status','invite_token','invite_expires_at','invited_at','joined_at'] },
-    { title: 'Config',    header: ['store_name','drive_folder_id','last_item_seq','drive_quota_warning_sent'] },
+    { title: 'Config',    header: ['store_name','drive_folder_id','last_item_seq','drive_quota_warning_sent','manager_refresh_token'] },
     { title: 'Categories',header: ['category_id','category_name','sort_order','created_at'] },
   ]
 

@@ -37,20 +37,27 @@ export function AddEditItemPage({ user }: Props) {
       .then((item) => { setExisting(item ?? null); setLoading(false) })
   }, [id])
 
-  function blobToDataURL(blob: Blob): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as string)
-      reader.onerror = () => reject(new Error('Failed to read image'))
-      reader.readAsDataURL(blob)
+  async function uploadIcon(blob: Blob): Promise<string> {
+    const fd = new FormData()
+    fd.append('icon', blob, 'icon.jpg')
+    const res = await fetch('/api/upload/icon', {
+      method: 'POST',
+      credentials: 'include',
+      body: fd,
     })
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new Error(`Icon upload failed: ${text.slice(0, 200)}`)
+    }
+    const data = await res.json() as { url: string }
+    return data.url
   }
 
   async function handleSubmit(data: Partial<InventoryItem>, iconBlob: Blob | null) {
     let icon_url = existing?.icon_url ?? ''
 
-    if (iconBlob) {
-      icon_url = await blobToDataURL(iconBlob)
+    if (iconBlob && !offline) {
+      icon_url = await uploadIcon(iconBlob)
     }
 
     const now = new Date().toISOString()

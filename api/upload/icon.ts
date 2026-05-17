@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireSession } from '../_lib/session.js'
 import { requireRole } from '../_lib/roles.js'
-import { checkDriveQuota, uploadIconToDrive } from '../_lib/drive.js'
+import { uploadIconAsManager } from '../_lib/drive.js'
 import { getConfig } from '../_lib/sheets.js'
 import { Readable } from 'stream'
 
@@ -16,12 +16,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const storeConfig = await getConfig(user.sheet_id)
     const folderId = storeConfig.drive_folder_id
-    if (!folderId) return res.status(400).json({ error: 'Drive folder not configured. Set drive_folder_id in Config tab.' })
+    if (!folderId) return res.status(400).json({ error: 'Drive folder not configured.' })
 
-    const { blocked } = await checkDriveQuota()
-    if (blocked) {
-      return res.status(507).json({ error: 'Google Drive storage is above 90% full. Free up space before uploading icons.' })
-    }
+    const refreshToken = storeConfig.manager_refresh_token
+    if (!refreshToken) return res.status(400).json({ error: 'Manager refresh token not found. Please sign out and sign in again to reauthorize.' })
 
     const chunks: Buffer[] = []
     for await (const chunk of req as unknown as AsyncIterable<Buffer>) {
@@ -38,7 +36,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const filename = `icon_${Date.now()}.jpg`
     const stream = Readable.from(filePart.data)
-    const url = await uploadIconToDrive(folderId, filename, stream, 'image/jpeg')
+    const url = await uploadIconAsManager(folderId, filename, stream, 'image/jpeg', refreshToken)
 
     res.status(200).json({ url })
   } catch (e: unknown) {

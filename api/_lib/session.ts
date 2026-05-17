@@ -10,6 +10,7 @@ export interface SessionData {
   sheet_id: string
   // Held temporarily between OAuth callback and store creation, then cleared.
   oauth_access_token?: string
+  oauth_refresh_token?: string
 }
 
 const SESSION_OPTIONS = {

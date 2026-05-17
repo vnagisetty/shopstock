@@ -29,6 +29,7 @@ export interface Config {
   drive_folder_id: string
   last_item_seq: number
   drive_quota_warning_sent: boolean
+  manager_refresh_token: string
 }
 
 export interface StaffMember {
