@@ -18,7 +18,7 @@ import { createDriveFolder } from '../_lib/drive.js'
 interface OAuthState {
   invite?: string
   store?: string
-  for?: 'drive'  // marks this as a second-step drive.file grant
+  for?: 'drive' | 'drive-reconnect'
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -27,18 +27,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ── GET /api/auth/login ───────────────────────────────────────────────────
   if (action === 'login') {
     const oauth2Client = getOAuthClient()
-    const invite   = typeof req.query.invite === 'string' ? req.query.invite : ''
-    const store    = typeof req.query.store  === 'string' ? req.query.store  : ''
-    const forDrive = req.query.for === 'drive'
-    const hint     = typeof req.query.hint   === 'string' ? req.query.hint   : ''
+    const invite        = typeof req.query.invite === 'string' ? req.query.invite : ''
+    const store         = typeof req.query.store  === 'string' ? req.query.store  : ''
+    const forParam      = typeof req.query.for    === 'string' ? req.query.for    : ''
+    const hint          = typeof req.query.hint   === 'string' ? req.query.hint   : ''
+    const isDriveFlow   = forParam === 'drive' || forParam === 'drive-reconnect'
     const state: OAuthState = {}
-    if (invite)   state.invite = invite
-    if (store)    state.store  = store
-    if (forDrive) state.for    = 'drive'
+    if (invite)                        state.invite = invite
+    if (store)                         state.store  = store
+    if (forParam === 'drive')          state.for    = 'drive'
+    if (forParam === 'drive-reconnect') state.for   = 'drive-reconnect'
     const url = oauth2Client.generateAuthUrl({
       access_type: 'offline',
-      scope: forDrive ? ['https://www.googleapis.com/auth/drive.file'] : OAUTH_SCOPES,
-      prompt: forDrive ? 'consent' : 'select_account',
+      scope: isDriveFlow ? ['https://www.googleapis.com/auth/drive.file'] : OAUTH_SCOPES,
+      prompt: isDriveFlow ? 'consent' : 'select_account',
       ...(hint ? { login_hint: hint } : {}),
       state: JSON.stringify(state),
     })
@@ -55,6 +57,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try { stateData = JSON.parse(stateRaw) } catch { /* empty state */ }
     const inviteToken = stateData.invite ?? ''
     const storeId     = stateData.store  ?? ''
+
+    // Drive reconnect from Settings: save refresh token directly to Config
+    if (stateData.for === 'drive-reconnect') {
+      try {
+        const oauth2Client = getOAuthClient()
+        const { tokens } = await oauth2Client.getToken(code)
+        const session = await getSession(req, res)
+        if (!session.gmail || !session.sheet_id) return res.redirect(302, '/login?error=session_expired')
+        if (tokens.refresh_token) {
+          await updateConfig(session.sheet_id, { manager_refresh_token: tokens.refresh_token })
+        }
+        return res.redirect(302, '/settings')
+      } catch (e: unknown) {
+        console.error('drive-reconnect error:', e)
+        return res.redirect(302, '/settings?error=drive_connect_failed')
+      }
+    }
 
     // Second-step drive.file grant: just update the session token and return to /setup
     if (stateData.for === 'drive') {

@@ -19,7 +19,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!folderId) return res.status(400).json({ error: 'Drive folder not configured.' })
 
     const refreshToken = storeConfig.manager_refresh_token
-    if (!refreshToken) return res.status(400).json({ error: 'Manager refresh token not found. Please sign out and sign in again to reauthorize.' })
+    if (!refreshToken) return res.status(400).json({ error: 'Drive not connected for photo storage. Go to Settings → Connect Google Drive.' })
 
     const chunks: Buffer[] = []
     for await (const chunk of req as unknown as AsyncIterable<Buffer>) {

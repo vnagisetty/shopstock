@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { StaffList } from '@/components/settings/StaffList'
 import { InviteModal } from '@/components/settings/InviteModal'
 import { CategoryManager } from '@/components/settings/CategoryManager'
@@ -22,14 +22,22 @@ interface ConfigResponse {
 export function SettingsPage({ user }: Props) {
   if (user.role !== 'manager') return <Navigate to="/items" replace />
 
+  const location = useLocation()
+  const driveError = new URLSearchParams(location.search).get('error') === 'drive_connect_failed'
+
   const { categories, reload: reloadCats } = useCategories()
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [storeName, setStoreName] = useState('')
   const [storeNameSaving, setStoreNameSaving] = useState(false)
+  const [driveConnected, setDriveConnected] = useState<boolean | null>(null)
 
   useEffect(() => {
     void apiFetch('/api/staff').then((r) => { setStaff((r as StaffResponse).staff) }).catch(() => {})
-    void apiFetch('/api/config').then((r) => { setStoreName((r as ConfigResponse).config.store_name ?? '') }).catch(() => {})
+    void apiFetch('/api/config').then((r) => {
+      const config = (r as ConfigResponse).config
+      setStoreName(config.store_name ?? '')
+      setDriveConnected(Boolean(config.manager_refresh_token))
+    }).catch(() => {})
   }, [])
 
   async function reloadStaff() {
@@ -75,6 +83,32 @@ export function SettingsPage({ user }: Props) {
               {storeNameSaving ? '…' : 'Save'}
             </button>
           </div>
+        </div>
+      </div>
+
+      <div className={section}>
+        <h2 className={sectionTitle}>Photo Storage</h2>
+        <div className="bg-white rounded-xl p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className={`w-2.5 h-2.5 rounded-full ${driveConnected === true ? 'bg-green-500' : driveConnected === false ? 'bg-red-400' : 'bg-gray-300'}`} />
+            <span className="text-sm text-gray-700">
+              {driveConnected === true ? 'Google Drive connected — photos save to your Drive' :
+               driveConnected === false ? 'Google Drive not connected — photo uploads will fail' :
+               'Checking…'}
+            </span>
+          </div>
+          {driveError && (
+            <p className="text-xs text-red-500">Connection failed. Please try again.</p>
+          )}
+          <a
+            href={`/api/auth/login?for=drive-reconnect&hint=${encodeURIComponent(user.gmail)}`}
+            className="inline-block px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium"
+          >
+            {driveConnected ? 'Reconnect Google Drive' : 'Connect Google Drive'}
+          </a>
+          <p className="text-xs text-gray-400">
+            Item photos are stored in your Google Drive folder. You may need to reconnect if uploads stop working.
+          </p>
         </div>
       </div>
 
