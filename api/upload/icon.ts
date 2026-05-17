@@ -42,8 +42,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     res.status(200).json({ url })
   } catch (e: unknown) {
-    console.error('upload/icon error:', e)
-    res.status(500).json({ error: String(e) })
+    const msg = e instanceof Error ? e.message : String(e)
+    // Extract the Drive API error body if present
+    const driveErr = (e as { response?: { data?: unknown } })?.response?.data
+    console.error('upload/icon error:', driveErr ?? msg)
+    res.status(500).json({ error: driveErr ? JSON.stringify(driveErr) : msg })
   }
 }
 
