@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { ShoppingBag, Settings } from 'lucide-react'
+import { ShoppingBag, Settings, HelpCircle } from 'lucide-react'
 import type { Role } from '@/lib/types'
 
 interface Props {
@@ -24,6 +24,10 @@ export function BottomNav({ role }: Props) {
           Settings
         </NavLink>
       )}
+      <NavLink to="/help" className={linkClass}>
+        <HelpCircle className="w-5 h-5" />
+        Help
+      </NavLink>
     </nav>
   )
 }

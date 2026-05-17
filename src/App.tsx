@@ -7,6 +7,7 @@ import { ItemsPage } from '@/pages/ItemsPage'
 import { ItemDetailPage } from '@/pages/ItemDetailPage'
 import { AddEditItemPage } from '@/pages/AddEditItemPage'
 import { SettingsPage } from '@/pages/SettingsPage'
+import { HelpPage } from '@/pages/HelpPage'
 import { useAuth } from '@/hooks/useAuth'
 import { useSync } from '@/hooks/useSync'
 import { getConfig } from '@/lib/db'
@@ -46,6 +47,7 @@ function AuthenticatedApp() {
         <Route path="/items/:id" element={<ItemDetailPage user={user} />} />
         <Route path="/items/:id/edit" element={<AddEditItemPage user={user} />} />
         <Route path="/settings" element={<SettingsPage user={user} />} />
+        <Route path="/help" element={<HelpPage />} />
         <Route path="*" element={<Navigate to="/items" replace />} />
       </Routes>
     </AppShell>

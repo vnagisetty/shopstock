@@ -1,5 +1,5 @@
-const MAX_DIM = 200
-const QUALITY = 0.7
+const MAX_DIM = 80
+const QUALITY = 0.5
 
 export async function compressImage(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => {
