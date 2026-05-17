@@ -102,5 +102,6 @@ export async function uploadIconAsManager(
     requestBody: { role: 'reader', type: 'anyone' },
   })
 
-  return `https://drive.google.com/uc?export=view&id=${fileId}`
+  // thumbnail URL loads directly in <img> tags without auth redirects
+  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`
 }
