@@ -40,10 +40,7 @@ export function AddEditItemPage({ user }: Props) {
   function friendlyUploadError(text: string, status: number): string {
     if (status === 507) return 'Google Drive storage is almost full. Free up space and try again.'
     if (status === 400 && text.includes('folder')) return 'Drive folder not configured. Set it in Settings.'
-    if (text.includes('storageQuota') || text.includes('storage quota')) return 'Icon upload failed: Drive storage is full.'
-    if (text.includes('permission') || text.includes('forbidden') || text.includes('403')) return 'Icon upload failed: Drive permission error. Check service account access.'
-    if (status >= 500) return `Icon upload failed: ${text.slice(0, 120)}`
-    return 'Icon upload failed. Try again or save without an icon.'
+    return `Icon upload failed (${status}): ${text.slice(0, 300)}`
   }
 
   async function uploadIcon(blob: Blob): Promise<string> {
